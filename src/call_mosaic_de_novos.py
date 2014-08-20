@@ -105,7 +105,7 @@ class MosaicCalling(object):
     vcftools_merge = "/software/ddd/external/vcftools/0.1.11/bin/vcf-merge"
     # bcftools = "/nfs/users/nfs_j/jm33/apps/bcftools/bcftools"
     pl_fixer = "/nfs/users/nfs_j/jm33/apps/mosaic_de_novos/src/fix_pl_field.py"
-    ped_maker = "/nfs/users/nfs_j/jm33/apps/mosaic_de_novos/src/make_ped_from_trio_bcf.py"
+    # ped_maker = "/nfs/users/nfs_j/jm33/apps/mosaic_de_novos/src/make_ped_from_trio_bcf.py"
     overlap_filter = "/nfs/users/nfs_j/jm33/apps/mosaic_de_novos/src/filter_mosaic_denovogear.py"
     
     female_codes = ["F", "Female", "female", "2"]
@@ -143,6 +143,30 @@ class MosaicCalling(object):
             chroms = "\n".join(chroms) + "\n"
             seq_dic.write(chroms)
             seq_dic.close()
+        
+        self.make_corrected_vcf_headers([self.child_id, self.mother_id, self.father_id])
+        
+        # find the sample BAMs
+        self.child_bam = self.find_bam_path(self.child_id, self.bams_dir)
+        self.mother_bam = self.find_bam_path(self.mother_id, self.bams_dir)
+        self.father_bam = self.find_bam_path(self.father_id, self.bams_dir)
+        
+        # make a new bam for the child for using with the standard samtools, so
+        # it has a different filename
+        self.new_bam = self.child_bam[:-3] + "standard_samtools.bam"
+        if not os.path.exists(self.new_bam):
+            # allow for if the symlink exists, but doesn't point to a valid path
+            if os.path.lexists(new_bam):
+                os.remove(self.new_bam)
+                os.remove(self.new_bam + ".bai")
+                
+            os.symlink(self.child_bam, self.new_bam)
+            os.symlink(self.child_bam + ".bai", self.new_bam + ".bai")
+        
+        # make sure there is a ped file available for the trio
+        self.ped_path = os.path.join(os.path.dirname(self.child_bam), self.child_id + ".ped")
+        if not os.path.exists(self.ped_path):
+            self.make_ped_for_trio(self.child_bam, self.mother_bam, self.father_bam, self.ped_path)
     
     def is_number(self, string):
         """ check whether a string can be converted to a number
@@ -185,13 +209,6 @@ class MosaicCalling(object):
     def call_mosaic_de_novos(self):
         """ run through all of the chroms, region by region
         """
-        
-        self.make_corrected_vcf_headers([self.child_id, self.mother_id, self.father_id])
-        
-        # find the sample BAMs
-        self.child_bam = self.find_bam_path(self.child_id, self.bams_dir)
-        self.mother_bam = self.find_bam_path(self.mother_id, self.bams_dir)
-        self.father_bam = self.find_bam_path(self.father_id, self.bams_dir)
         
         increment = 5000000
         
@@ -240,34 +257,51 @@ class MosaicCalling(object):
             output.write(header_line)
             output.close()
     
+    def make_ped_for_trio(self, child, mother, father, ped_path):
+        """ make a PED file to define the samples in a BCF file
+        
+        Assumes the BCF contains data for members of a trio, in the order of father,
+        mother, child. We use the IDs from the last line of the header.
+        
+        Args:
+            bcf_path: path to the BCF file.
+            ped_path: path to write the PED file to.
+        """
+        
+        # get the alternative IDs that will exist in the VCF file
+        child_id = get_sample_id_from_bam(child)
+        mother_id = get_sample_id_from_bam(mother)
+        father_id = get_sample_id_from_bam(father)
+        
+        # make a ped file
+        fam_id = "temp"
+        
+        # make the lines for the PED file, in PED format.
+        child_line = "\t".join([fam_id, child_id, father_id, mother_id, self.proband_sex, "2"]) + "\n"
+        father_line = "\t".join([fam_id, father_id, "0", "0"  , "1", "1"]) + "\n"
+        mother_line = "\t".join([fam_id, mother_id, "0", "0", "1", "2"]) + "\n"
+        lines = [child_line, father_line, mother_line]
+        
+        output = open(ped_path, "w")
+        output.writelines(lines)
+        output.close()
+    
     def call_mosaic_de_novos_in_region(self, region):
         """ call the rest of the functions in this class, in the correct order, 
         and on the correct files
         """
         
-        # make a new bam for the child for using with the standard samtools, so
-        # it has a different filename
-        new_bam = self.child_bam[:-3] + "standard_samtools.bam"
-        if not os.path.exists(new_bam):
-            # allow for if the symlink exists, but doesn't point to a valid path
-            if os.path.lexists(new_bam):
-                os.remove(new_bam)
-                os.remove(new_bam + ".bai")
-                
-            os.symlink(child_bam, new_bam)
-            os.symlink(child_bam + ".bai", new_bam + ".bai")
-        
         # run samtools, with the modified samtools used for the child
         child = self.modified_samtools(self.child_bam, region)
         mother = self.standard_samtools(self.mother_bam, region)
         father = self.standard_samtools(self.father_bam, region)
-        new_child = self.standard_samtools(new_bam, region)
+        new_child = self.standard_samtools(self.new_bam, region)
         command = child + [";"] + mother + [";"] + father + [";"] + new_child
         job_id = self.get_random_string() + "_samtools"
         self.submit_bsub_job(command, job_id, memory=300)
         
         # prepare a BCF file for denovogear, then run denovogear on that
-        merge_id = self.run_denovogear(child_bam, new_bam, mother_bam, father_bam, region, job_id)
+        merge_id = self.run_denovogear(self.child_bam, self.new_bam, self.mother_bam, self.father_bam, region, job_id)
     
     def submit_bsub_job(self, command, job_id, dependent_id=None, memory=None):
         """ construct a bsub job submission command
@@ -409,15 +443,9 @@ class MosaicCalling(object):
         pl_fix = ["python", self.pl_fixer, "|"]
         bcf_convert = ["bcftools", "view", "-D", self.dic_path, "-Sb", "-", ">", bcf, ";"]
         # bcf_convert = [self.bcftools, "view", "-", "-o", bcf, ";"]
-        
-        ped_path = self.child_id + ".ped"
-        
-        make_ped = []
-        if not os.path.exists(ped_path):
-            make_ped = ["python", self.ped_maker, "--bcf", bcf, "--sex", self.proband_sex, "--ped", ped_path, ";"]
             
-        denovogear = [DENOVOGEAR, "dnm", "auto", "--ped", ped_path, "--bcf", bcf, ">", dnm]
-        command = merge + pl_fix + bcf_convert + make_ped + denovogear
+        denovogear = [DENOVOGEAR, "dnm", "auto", "--ped", self.ped_path, "--bcf", bcf, ">", dnm]
+        command = merge + pl_fix + bcf_convert + denovogear
         
         return command
 
