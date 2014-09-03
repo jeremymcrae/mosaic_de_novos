@@ -22,7 +22,10 @@ def get_header(f):
         else:
             break
     
-    first_line = line
+    try:
+        first_line = line
+    except:
+        first_line = ""
     
     return header, first_line
 

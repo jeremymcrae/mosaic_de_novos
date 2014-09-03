@@ -103,7 +103,7 @@ class MosaicCalling(object):
     reference = "/software/ddd/resources/v1.2/hs37d5.fasta"
     mod_samtools = "/nfs/team29/aw15/samtoolsMod/samtools"
     vcftools_merge = "/software/ddd/external/vcftools/0.1.11/bin/vcf-merge"
-    # bcftools = "/nfs/users/nfs_j/jm33/apps/bcftools/bcftools"
+    bcftools = "/nfs/users/nfs_j/jm33/apps/bcftools/bcftools"
     pl_fixer = "/nfs/users/nfs_j/jm33/apps/mosaic_de_novos/src/fix_pl_field.py"
     # ped_maker = "/nfs/users/nfs_j/jm33/apps/mosaic_de_novos/src/make_ped_from_trio_bcf.py"
     overlap_filter = "/nfs/users/nfs_j/jm33/apps/mosaic_de_novos/src/filter_mosaic_denovogear.py"
@@ -136,15 +136,9 @@ class MosaicCalling(object):
         
         # make sure we have a contig dictionary file available
         self.dic_path = "seq_dic.txt"
-        if not os.path.exists(self.dic_path):
-            seq_dic = open(self.dic_path, "w")
-            chroms = range(1, 22) + ["X"]
-            chroms = [str(x) for x in chroms]
-            chroms = "\n".join(chroms) + "\n"
-            seq_dic.write(chroms)
-            seq_dic.close()
+        self.make_seq_dic_file()
         
-        self.make_corrected_vcf_headers([self.child_id, self.mother_id, self.father_id])
+        self.make_corrected_vcf_headers([self.child_id, self.mother_id, self.father_id, self.child_id + ".standard_samtools"])
         
         # find the sample BAMs
         self.child_bam = self.find_bam_path(self.child_id, self.bams_dir)
@@ -154,6 +148,29 @@ class MosaicCalling(object):
         # make a new bam for the child for using with the standard samtools, so
         # it has a different filename
         self.new_bam = self.child_bam[:-3] + "standard_samtools.bam"
+        self.make_new_child_bam()
+        
+        # make sure there is a ped file available for the trio
+        self.ped_path = os.path.join(os.path.dirname(self.child_bam), self.child_id + ".ped")
+        self.make_ped_for_trio(self.child_bam, self.mother_bam, self.father_bam, self.ped_path)
+    
+    def make_seq_dic_file(self):
+        """ make sure we have a contig dictionary file available
+        """
+        
+        if not os.path.exists(self.dic_path):
+            seq_dic = open(self.dic_path, "w")
+            chroms = list(range(1, 22)) + ["X", "Y"]
+            chroms = [str(x) for x in chroms]
+            chroms = "\n".join(chroms) + "\n"
+            seq_dic.write(chroms)
+            seq_dic.close()
+    
+    def make_new_child_bam(self):
+        """ make a new bam for the child for using with the standard samtools,
+        so it has a different filename
+        """
+        
         if not os.path.exists(self.new_bam):
             # allow for if the symlink exists, but doesn't point to a valid path
             if os.path.lexists(new_bam):
@@ -162,11 +179,6 @@ class MosaicCalling(object):
                 
             os.symlink(self.child_bam, self.new_bam)
             os.symlink(self.child_bam + ".bai", self.new_bam + ".bai")
-        
-        # make sure there is a ped file available for the trio
-        self.ped_path = os.path.join(os.path.dirname(self.child_bam), self.child_id + ".ped")
-        if not os.path.exists(self.ped_path):
-            self.make_ped_for_trio(self.child_bam, self.mother_bam, self.father_bam, self.ped_path)
     
     def is_number(self, string):
         """ check whether a string can be converted to a number
@@ -201,7 +213,7 @@ class MosaicCalling(object):
         """ find the path to the extracted BAM file
         """
         
-        sample_dir = os.path.join(bam_dir, sample_id)
+        sample_dir = os.path.join(bam_dir, sample_id.rstrip(".standard_samtools"))
         sample_bam = os.path.join(sample_dir, sample_id + ".bam")
         
         return sample_bam
@@ -210,30 +222,21 @@ class MosaicCalling(object):
         """ run through all of the chroms, region by region
         """
         
-        increment = 5000000
+        increment = 50000000
         
         i = 1
         for chrom in self.chrom_lengths:
             max_length = self.chrom_lengths[chrom]
-            start = None
+            start = 1
             end = 1
             
-            while start <= max_length:
+            while end <= max_length:
                 start = end
                 end = end + increment
                 
                 region = (chrom, start, end)
-                # print(region)
+                self.call_mosaic_de_novos_in_region(region)
                 i += 1
-                # self.call_mosaic_de_novos_in_region(region)
-                
-                std_path = "{0}/{1}/{1}.denovogear.{2}.{3}-{4}.standard.dnm".format(TEMP_DIR, self.child_id, chrom, start, end)
-                mod_path = "{0}/{1}/{1}.denovogear.{2}.{3}-{4}.modified.dnm".format(TEMP_DIR, self.child_id, chrom, start, end)
-                subprocess.call(["python", self.overlap_filter, "--standard", std_path, "--modified", mod_path])
-                
-                # sys.exit()
-        
-        # print(i)
     
     def make_corrected_vcf_headers(self, samples):
         """ makes a header file for each bam that fixes the lack of explanatory lines
@@ -246,15 +249,15 @@ class MosaicCalling(object):
             bam_dir = os.path.dirname(bam_path)
             
             alt_id = get_sample_id_from_bam(bam_path)
-            header_line += alt_id + "\n"
+            header = header_line + "\t" + alt_id + "\n"
             
-            new_path = os.path.join(bam_dir, sample_id + "fixed_header.txt")
+            new_path = os.path.join(bam_dir, sample_id + ".fixed_header.txt")
             
             shutil.copy(FIXED_HEADER, new_path)
             
             # and write the final line that includes the alt ID
             output = open(new_path, "a")
-            output.write(header_line)
+            output.write(header)
             output.close()
     
     def make_ped_for_trio(self, child, mother, father, ped_path):
@@ -282,9 +285,11 @@ class MosaicCalling(object):
         mother_line = "\t".join([fam_id, mother_id, "0", "0", "1", "2"]) + "\n"
         lines = [child_line, father_line, mother_line]
         
-        output = open(ped_path, "w")
-        output.writelines(lines)
-        output.close()
+        # only create the file if it doesn't already exist
+        if not os.path.exists(ped_path):
+            output = open(ped_path, "w")
+            output.writelines(lines)
+            output.close()
     
     def call_mosaic_de_novos_in_region(self, region):
         """ call the rest of the functions in this class, in the correct order, 
@@ -387,16 +392,19 @@ class MosaicCalling(object):
         region_path = ".{0}.{1}-{2}".format(*region)
         
         # set the path to the output VCF
-        vcf = os.path.splitext(bam)[0] + region_path + ".vcf"
+        vcf = os.path.splitext(bam)[0] + region_path + ".temp.vcf.gz"
+        new_vcf = os.path.splitext(bam)[0] + region_path + ".vcf.gz"
+        header = os.path.join(os.path.splitext(bam)[0] + ".fixed_header.txt")
         
         # define the unix tools to use
-        # bcftools = [self.bcftools, "view", "-O", "z", "-", "-o", vcf + ".gz", ";"]
         bcftools = ["bcftools", "view", "-", "|"]
-        bgzip = ["bgzip", ">", vcf + ".gz", ";"]
-        tabix = ["tabix", "-f", "-p", "vcf", vcf + ".gz"]
+        bgzip = ["bgzip", ">", vcf, ";"]
+        tabix = ["tabix", "-f", "-p", "vcf", vcf, ";"]
+        reheader = [self.bcftools, "reheader", "--header", header, vcf, ">", new_vcf, ";"]
+        new_tabix = ["tabix", "-f", "-p", "vcf", new_vcf, ";"]
+        rm_temp = ["rm", vcf, vcf + ".tbi"]
         
-        vcf_convert = bcftools + bgzip + tabix
-        # vcf_convert = bcftools + tabix
+        vcf_convert = bcftools +bgzip + tabix + reheader + new_tabix + rm_temp
         
         return vcf_convert
     
@@ -415,18 +423,26 @@ class MosaicCalling(object):
         
         job_id = samtools_job_id.rstrip("samtools") + "denovogear"
         
-        dng_mod = self.construct_dng_command(new_child, mother, father, merge_mod, dnm_mod, region)
-        dng_std = self.construct_dng_command(child, mother, father, merge_std, dnm_std, region)
+        bcf_mod = self.make_bcf_command(new_child, mother, father, merge_mod, region)
+        bcf_std = self.make_bcf_command(new_child, mother, father, merge_std, region)
         
-        command = dng_mod + [";"] + dng_std
+        dng_mod = self.construct_dng_command(merge_mod, dnm_mod, region)
+        dng_std = self.construct_dng_command(merge_std, dnm_std, region)
+        
+        # set the paths to the individual VCFs
+        child_vcf = os.path.splitext(child)[0] + region_path + ".vcf.gz"
+        new_child_vcf = os.path.splitext(new_child)[0] + region_path + ".vcf.gz"
+        mother_vcf = os.path.splitext(mother)[0] + region_path + ".vcf.gz"
+        father_vcf = os.path.splitext(father)[0] + region_path + ".vcf.gz"
+        rm_vcfs = ["rm", father_vcf, mother_vcf, child_vcf, new_child_vcf, father_vcf + ".tbi", mother_vcf + ".tbi", child_vcf + ".tbi", new_child_vcf + ".tbi"]
+        
+        command = bcf_mod + [";"] + bcf_std + [";"] + dng_mod + [";"] + dng_std + [";"] + rm_vcfs
         self.submit_bsub_job(command, job_id, dependent_id=samtools_job_id)
         
         return job_id
     
-    def construct_dng_command(self, child, mother, father, bcf, dnm, region):
-        """ Use DNG to call de novo mutations. In this particular case, I use 
-        v0.5. As always with DNG, the appropriate PED file (family.ped) has to 
-        be in the working directory.
+    def make_bcf_command(self, child, mother, father, bcf, region):
+        """ we need to generate BCF for denovogear to work on
         """
         
         region_path = ".{0}.{1}-{2}".format(*region)
@@ -438,14 +454,28 @@ class MosaicCalling(object):
         
         # set up the merge commands, fix the PL field, and generate a BCF for 
         # denovogear
-        merge = [self.vcftools_merge, father, mother, child, "|"]
-        # merge = [self.bcftools, "merge", father, mother, child, "|"]
+        merge = [self.bcftools, "merge", father, mother, child, "|"]
         pl_fix = ["python", self.pl_fixer, "|"]
         bcf_convert = ["bcftools", "view", "-D", self.dic_path, "-Sb", "-", ">", bcf, ";"]
-        # bcf_convert = [self.bcftools, "view", "-", "-o", bcf, ";"]
-            
-        denovogear = [DENOVOGEAR, "dnm", "auto", "--ped", self.ped_path, "--bcf", bcf, ">", dnm]
-        command = merge + pl_fix + bcf_convert + denovogear
+        
+        command = merge + pl_fix + bcf_convert
+        
+        return command
+    
+    def construct_dng_command(self, bcf, dnm, region):
+        """ Use DNG to call de novo mutations. In this particular case, I use 
+        v0.5. As always with DNG, the appropriate PED file (family.ped) has to 
+        be in the working directory.
+        """
+        
+        if region[0] != "X":
+            dng_chr_type = "auto"
+        elif region[0] == "X" and self.proband_sex in self.male_codes:
+            dng_chr_type = "XS"
+        elif region[0] == "X" and self.proband_sex in self.female_codes:
+            dng_chr_type = "XD"
+        
+        command = [DENOVOGEAR, "dnm", dng_chr_type, "--ped", self.ped_path, "--bcf", bcf, ">", dnm]
         
         return command
 
@@ -465,8 +495,8 @@ def main():
     stop = "5000000"
     region = (chrom, start, stop)
     
-    caller.call_mosaic_de_novos_in_region(region)
-    # caller.call_mosaic_de_novos()
+    # caller.call_mosaic_de_novos_in_region(region)
+    caller.call_mosaic_de_novos()
     
     # for family, sex in families:
         
