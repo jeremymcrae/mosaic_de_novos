@@ -79,6 +79,74 @@ def extract_bams(families, bams_dir):
             
             subprocess.call(bsub_preamble + extract_command)
 
+def symlink_bam(current_path, new_path):
+    """ make a new bam for the child for using with the standard samtools,
+    so it has a different filename
+    """
+    
+    if not os.path.exists(new_path):
+        # allow for if the symlink exists, but doesn't point to a valid path
+        if os.path.lexists(new_path):
+            os.remove(new_path)
+            os.remove(new_path + ".bai")
+            
+        os.symlink(current_path, new_path)
+        os.symlink(current_path + ".bai", new_path + ".bai")
+
+def make_seq_dic_file(dic_path):
+    """ make sure we have a contig dictionary file available
+    """
+    
+    if not os.path.exists(dic_path):
+        seq_dic = open(dic_path, "w")
+        chroms = list(range(1, 22)) + ["X", "Y"]
+        chroms = [str(x) for x in chroms]
+        chroms = "\n".join(chroms) + "\n"
+        seq_dic.write(chroms)
+        seq_dic.close()
+
+def find_bam_path(sample_id, bam_dir):
+    """ find the path to the extracted BAM file
+    """
+    
+    sample_dir = os.path.join(bam_dir, sample_id.rstrip(".standard_samtools"))
+    sample_bam = os.path.join(sample_dir, sample_id + ".bam")
+    
+    return sample_bam
+
+def make_ped_for_trio(self, child, mother, father, ped_path):
+    """ make a PED file to define the samples in a BCF file
+    
+    Assumes the BCF contains data for members of a trio, in the order of father,
+    mother, child. We use the IDs from the last line of the header.
+    
+    Args:
+        child: path to a bam file for the child.
+        mother: path to a bam file for the mother.
+        father: path to a bam file for the father.
+        ped_path: path to write the PED file to.
+    """
+    
+    # get the alternative IDs that will exist in the VCF file
+    child_id = get_sample_id_from_bam(child)
+    mother_id = get_sample_id_from_bam(mother)
+    father_id = get_sample_id_from_bam(father)
+    
+    # make a ped file
+    fam_id = "temp"
+    
+    # make the lines for the PED file, in PED format.
+    child_line = "\t".join([fam_id, child_id, father_id, mother_id, self.proband_sex, "2"]) + "\n"
+    father_line = "\t".join([fam_id, father_id, "0", "0"  , "1", "1"]) + "\n"
+    mother_line = "\t".join([fam_id, mother_id, "0", "0", "1", "2"]) + "\n"
+    lines = [child_line, father_line, mother_line]
+    
+    # only create the file if it doesn't already exist
+    if not os.path.exists(ped_path):
+        output = open(ped_path, "w")
+        output.writelines(lines)
+        output.close()
+
 def get_sample_id_from_bam(bam_path):
     """ extracts a sample ID from a BAM file
     
@@ -96,7 +164,6 @@ def get_sample_id_from_bam(bam_path):
     sample_id = read_group[0]["SM"]
     
     return sample_id
-
 
 class MosaicCalling(object):
     
@@ -118,11 +185,11 @@ class MosaicCalling(object):
         "16": 90338345, "17": 83257441, "18": 80373285, "19": 58617616, \
         "20": 64444167, "21": 46709983, "22": 50818468, "X": 156040895}
          
-    def __init__(self, family, sex, bams_dir):
+    def __init__(self, child_id, mother_id, father_id, child_bam, mother_bam, father_bam, new_child_bam, sex, dic_path):
         
-        self.child_id = family["child"]
-        self.mother_id = family["mother"]
-        self.father_id = family["father"]
+        self.child_id = child_id
+        self.mother_id = mother_id
+        self.father_id = father_id
         
         if sex in self.female_codes:
             self.proband_sex = "2"
@@ -131,53 +198,23 @@ class MosaicCalling(object):
         else:
             raise ValueError("unknown gender: " + sex)
         
-        self.bams_dir = bams_dir
-        
-        # make sure we have a contig dictionary file available
-        self.dic_path = "seq_dic.txt"
-        self.make_seq_dic_file()
+        self.dic_path = dic_path
         
         # find the sample BAMs
-        self.child_bam = self.find_bam_path(self.child_id, self.bams_dir)
-        self.mother_bam = self.find_bam_path(self.mother_id, self.bams_dir)
-        self.father_bam = self.find_bam_path(self.father_id, self.bams_dir)
+        self.child_bam = child_bam
+        self.mother_bam = mother_bam
+        self.father_bam = father_bam
         
         # make a new bam for the child for using with the standard samtools, so
         # it has a different filename
-        self.new_bam = self.child_bam[:-3] + "standard_samtools.bam"
-        self.make_new_child_bam()
+        self.new_bam = new_child_bam
         
-        self.make_corrected_vcf_headers([self.child_id, self.mother_id, self.father_id, self.child_id + ".standard_samtools"])
-        
-        # make sure there is a ped file available for the trio
-        self.ped_path = os.path.join(os.path.dirname(self.child_bam), self.child_id + ".ped")
-        self.make_ped_for_trio(self.child_bam, self.mother_bam, self.father_bam, self.ped_path)
-    
-    def make_seq_dic_file(self):
-        """ make sure we have a contig dictionary file available
-        """
-        
-        if not os.path.exists(self.dic_path):
-            seq_dic = open(self.dic_path, "w")
-            chroms = list(range(1, 22)) + ["X", "Y"]
-            chroms = [str(x) for x in chroms]
-            chroms = "\n".join(chroms) + "\n"
-            seq_dic.write(chroms)
-            seq_dic.close()
-    
-    def make_new_child_bam(self):
-        """ make a new bam for the child for using with the standard samtools,
-        so it has a different filename
-        """
-        
-        if not os.path.exists(self.new_bam):
-            # allow for if the symlink exists, but doesn't point to a valid path
-            if os.path.lexists(self.new_bam):
-                os.remove(self.new_bam)
-                os.remove(self.new_bam + ".bai")
-                
-            os.symlink(self.child_bam, self.new_bam)
-            os.symlink(self.child_bam + ".bai", self.new_bam + ".bai")
+        # make header files that provide more info than standard samtools output
+        # which is required by a recent bcftools version.
+        self.make_corrected_vcf_header(self.child_id, self.child_bam)
+        self.make_corrected_vcf_header(self.mother_id, self.mother_bam)
+        self.make_corrected_vcf_header(self.father_id, self.father_bam)
+        self.make_corrected_vcf_header(self.child_id, self.new_bam)
     
     def is_number(self, string):
         """ check whether a string can be converted to a number
@@ -208,15 +245,6 @@ class MosaicCalling(object):
         
         return hash_string
     
-    def find_bam_path(self, sample_id, bam_dir):
-        """ find the path to the extracted BAM file
-        """
-        
-        sample_dir = os.path.join(bam_dir, sample_id.rstrip(".standard_samtools"))
-        sample_bam = os.path.join(sample_dir, sample_id + ".bam")
-        
-        return sample_bam
-    
     def call_mosaic_de_novos(self):
         """ run through all of the chroms, region by region
         """
@@ -237,58 +265,25 @@ class MosaicCalling(object):
                 self.call_mosaic_de_novos_in_region(region)
                 i += 1
     
-    def make_corrected_vcf_headers(self, samples):
-        """ makes a header file for each bam that fixes the lack of explanatory lines
+    def make_corrected_vcf_header(self, sample_id, bam_path):
+        """ makes a header file that fixes the lack of explanatory lines
         """
         
         header_line = "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT"
         
-        for sample_id in samples:
-            bam_path = self.find_bam_path(sample_id, self.bams_dir)
-            bam_dir = os.path.dirname(bam_path)
-            
-            alt_id = get_sample_id_from_bam(bam_path)
-            header = header_line + "\t" + alt_id + "\n"
-            
-            new_path = os.path.join(bam_dir, sample_id + ".fixed_header.txt")
-            
-            shutil.copy(FIXED_HEADER, new_path)
-            
-            # and write the final line that includes the alt ID
-            output = open(new_path, "a")
-            output.write(header)
-            output.close()
-    
-    def make_ped_for_trio(self, child, mother, father, ped_path):
-        """ make a PED file to define the samples in a BCF file
+        bam_dir = os.path.dirname(bam_path)
         
-        Assumes the BCF contains data for members of a trio, in the order of father,
-        mother, child. We use the IDs from the last line of the header.
+        alt_id = get_sample_id_from_bam(bam_path)
+        header = header_line + "\t" + alt_id + "\n"
         
-        Args:
-            bcf_path: path to the BCF file.
-            ped_path: path to write the PED file to.
-        """
+        new_path = os.path.join(bam_dir, sample_id + ".fixed_header.txt")
         
-        # get the alternative IDs that will exist in the VCF file
-        child_id = get_sample_id_from_bam(child)
-        mother_id = get_sample_id_from_bam(mother)
-        father_id = get_sample_id_from_bam(father)
+        shutil.copy(FIXED_HEADER, new_path)
         
-        # make a ped file
-        fam_id = "temp"
-        
-        # make the lines for the PED file, in PED format.
-        child_line = "\t".join([fam_id, child_id, father_id, mother_id, self.proband_sex, "2"]) + "\n"
-        father_line = "\t".join([fam_id, father_id, "0", "0"  , "1", "1"]) + "\n"
-        mother_line = "\t".join([fam_id, mother_id, "0", "0", "1", "2"]) + "\n"
-        lines = [child_line, father_line, mother_line]
-        
-        # only create the file if it doesn't already exist
-        if not os.path.exists(ped_path):
-            output = open(ped_path, "w")
-            output.writelines(lines)
-            output.close()
+        # and write the final line that includes the alt ID
+        output = open(new_path, "a")
+        output.write(header)
+        output.close()
     
     def call_mosaic_de_novos_in_region(self, region):
         """ call the rest of the functions in this class, in the correct order, 
@@ -497,8 +492,27 @@ def main():
     
     # caller.call_mosaic_de_novos()
     
+    dic_path = "seq_dic.txt"
+    make_seq_dic_file(dic_path)
+    
     for family, sex in families:
-        caller = MosaicCalling(family, sex, TEMP_DIR)
+        
+        child_id = family["child"]
+        mother_id = family["mother"]
+        father_id = family["father"]
+        
+        child_bam = find_bam_path(child_id, TEMP_DIR)
+        mother_bam = find_bam_path(mother_id, TEMP_DIR)
+        father_bam = find_bam_path(father_id, TEMP_DIR)
+        
+        
+        new_child_bam = symlink_bam(child_bam)
+        
+        # make sure there is a ped file available for the trio
+        ped_path = os.path.join(os.path.dirname(child_bam), child_id + ".ped")
+        make_ped_for_trio(child_bam, mother_bam, father_bam, ped_path)
+        
+        caller = MosaicCalling(family, sex, dic_path)
         caller.call_mosaic_de_novos()
     
 
