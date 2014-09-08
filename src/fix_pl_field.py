@@ -5,6 +5,19 @@ import os
 import sys
 import argparse
 
+def get_options():
+    """
+    """
+    
+    parser = argparse.ArgumentParser(description="Fix PL fields in a VCF file.")
+    parser.add_argument("infile", nargs="?", type=argparse.FileType("r"), \
+        default=sys.stdin, help="VCF to fix")
+    
+    args = parser.parse_args()
+    
+    return args.infile
+
+
 def get_header(f):
     """ get the header lines from a VCF
     
@@ -87,17 +100,6 @@ def fix_merged_vcf(merged):
     process_vcf_line(first_line)
     for line in f:
         process_vcf_line(line)
-
-def get_options():
-    """
-    """
-    
-    parser = argparse.ArgumentParser(description="Fix PL fields in a VCF file.")
-    parser.add_argument("infile", nargs="?", type=argparse.FileType("r"), default=sys.stdin, help="VCF to fix")
-    
-    args = parser.parse_args()
-    
-    return args.infile
 
 def main():
     

@@ -7,103 +7,172 @@ from __future__ import division
 
 import argparse
 import sys
+import pysam
+from src.parse_denovogear import ParseDenovogear
+import tabulate
+from scipy.stats import poisson
+
+IS_PYTHON2 = sys.version_info[0] == 2
+IS_PYTHON3 = sys.version_info[0] == 3
 
 def get_options():
     """
     """
     
-    
-    parser = argparse.ArgumentParser(description="Fix PL fields in a VCF file.")
+    parser = argparse.ArgumentParser(description="Filter denovogear calls " + \
+        "from calling mosaic SNVs.")
     parser.add_argument("--standard", help="denovogear output from standard samtools")
     parser.add_argument("--modified", help="denovogear output from modified samtools")
+    parser.add_argument("--proband-bam", help="bam file for the proband.")
+    parser.add_argument("--mom-bam", help="bam file for the mother.")
+    parser.add_argument("--dad-bam", help="bam file for the father.")
     
     args = parser.parse_args()
     
-    return args.standard, args.modified
-
-def parse_denovogear_variant_line(line):
-    """ parses a denovogear variant output line
-    
-    Args:
-        line: line for a variant in a denovogear output fields
-    
-    Returns:
-        a dictionary filled with entries from the denovogear line
-    """
-    
-    variant = {}
-    
-    fields = line.strip().split(" ")
-    
-    variant["type"] = fields[0]
-    
-    read_idx = fields.index("READ_DEPTH")
-    map_idx = fields.index("MAPPING_QUALITY")
-    
-    # grab all the fields prior to the read depth fields, since these are easy
-    # unique key, value pairs up until then.
-    for i in range(2, read_idx, 2):
-        key = fields[i].strip(":")
-        variant[key] = fields[i + 1]
-    
-    # grab the person-specific read depth fields, which are unfortunately named
-    # the same as for the mapping quality fields
-    variant["READ_DEPTH"] = {}
-    for i in range(read_idx + 1, read_idx + 6, 2):
-        key = fields[i].strip(":")
-        variant["READ_DEPTH"][key] = fields[i + 1]
-    
-    # grab the person-specific mapping quality fields, which are unfortunately 
-    # named the same as for the read depth fields
-    variant["MAPPING_QUALITY"] = {}
-    for i in range(map_idx + 1, map_idx + 6, 2):
-        key = fields[i].strip(":")
-        variant["MAPPING_QUALITY"][key] = fields[i + 1]
-    
-    # might as well hang on to the original line, if we want to simply dump 
-    # these for later analysis
-    variant["line"] = line
-    
-    return variant
-
-def read_denovogear_output(path):
-    """ opens a denovo gear output file, extracts and parses the variant lines
-    
-    Args:
-        path: path to a denovogear output file
-    
-    Returns:
-        dictionary of parsed variant lines, indexed by (chrom, pos) tuples
-    """
-    
-    variants = {}
-    
-    with open(path, "r") as f:
-        for line in f:
-            if line.startswith("DENOVO"):
-                var = parse_denovogear_variant_line(line)
-                key = (var["ref_name"], var["coor"])
-                variants[key] = var
-    
-    return variants
+    return args.standard, args.modified, args.proband_bam, args.mom_bam, args.dad_bam
 
 def get_mosaic_only_de_novos(standard, modified):
     """ finds the variants that only occur in the mosaic analyses
     """
     
-    mod = read_denovogear_output(modified)
-    std = read_denovogear_output(standard)
+    modified = ParseDenovogear(modified)
+    standard = ParseDenovogear(standard)
     
-    mosaic_keys = set(mod) - set(std)
-    mosaic_only = {key: mod[key] for key in mosaic_keys}
+    mosaic_only = modified.get_subset(modified - standard)
     
     return mosaic_only
+
+def count_bases(bam, chrom, pos, max_coverage=1e10, min_qual=0):
+    """ counts reads with different base calls at a chrom position
+    
+    Args:
+        bam: pysam bam object
+        chrom: chromosome to use eg "chr1" or "1" depending on how the BAM is 
+            set up (specifically, an ID found in the BAMs sequence dictionary).
+        pos: base position to count bases at.
+        max_coverage: maximum coverage at which we stop tallying the bases
+        min_qual: minimum quality score required to include the base call
+    
+    Returns:
+        dictionary of read counts indexed by base calls
+    """
+    
+    assert type(pos) == int
+    
+    bases = {"A": 0, "G": 0, "C": 0, "T": 0, "N": 0}
+    
+    # count each base at the required site
+    for pileupcolumn in bam.pileup(chrom, pos - 1, pos):
+        if pileupcolumn.pos != pos - 1:
+            continue
         
+        for read in pileupcolumn.pileups:
+            if read.alignment.is_duplicate: # ignore duplicate reads
+                print("duplicate")
+                continue
+            elif read.alignment.is_qcfail:
+                print("FAIL")
+                continue
+            # Only use alignments with cigar strings of only matches (no soft
+            # clipped bases or indels)
+            elif read.alignment.cigar[0][0] != 0: 
+                continue
+            # don't check reads after a certain coverage (typically ~300X)
+            elif sum(bases.values()) > max_coverage * 5:
+                break
+            
+            # convert the quality score to integer
+            qual = read.alignment.qual[read.qpos]
+            if IS_PYTHON2: 
+                qual = ord(qual)
+            qual = qual - 33
+            
+            if qual < min_qual: # ignore low qual reads
+                continue
+            
+            # get the base call as a string
+            base = read.alignment.seq[read.qpos]
+            if IS_PYTHON3:
+                base = chr(base)
+            
+            bases[base] += 1
+    
+    return bases
+
+def examine_variants(mosaic_only, child_bam, mom_bam, dad_bam):
+    table = []
+    for (chrom, pos) in sorted(mosaic_only):
+        # this follows the probability model set out in: 
+        # Illumina Inc. Illumina Technical Note: Somatic Variant Caller. (2014). 
+        # at <http://res.illumina.com/documents/products/technotes/technote_somatic_variant_caller.pdf>
+        
+        min_qual = 20
+        bases = count_bases(child_bam, chrom, int(pos), max_coverage=1000, min_qual=min_qual)
+        mom_bases = count_bases(mom_bam, chrom, int(pos), max_coverage=1000, min_qual=min_qual)
+        dad_bases = count_bases(dad_bam, chrom, int(pos), max_coverage=1000, min_qual=min_qual)
+        
+        # the lambda for the poisson distribution is the proportion of off target
+        # bases that we expect, given the read depth and the min_qual
+        mu = (10 ** (-(abs(min_qual))/10)) * sum(bases.values())
+        
+        key = (chrom, pos)
+        ref_base = mosaic_only[key]["ref_base"]
+        alt_bases = set(mosaic_only[key]["ALT"].split(","))
+        alt_bases.remove("X")
+        
+        pp_dnm = float(mosaic_only[key]["pp_dnm"])
+        dng_depth = mosaic_only[key]["READ_DEPTH"]["child"]
+        depth = sum(bases.values())
+        mom_depth = sum(mom_bases.values())
+        dad_depth = sum(dad_bases.values())
+        
+        # currently hard code some depth filters (maybe swap this to based on the 
+        # global coverage)
+        if depth > 200 or depth < 20:
+            continue
+        
+        for alt_base in alt_bases:
+            alt_reads = bases[alt_base]
+            mom_prp = mom_bases[alt_base]/mom_depth
+            dad_prp = dad_bases[alt_base]/dad_depth
+            
+            de_novo_reads = alt_reads
+            if alt_reads > depth - alt_reads:
+                de_novo_reads = depth - alt_reads
+                mom_prp = 1 - mom_prp
+                dad_prp = 1 - dad_prp
+            
+            poisson_p = 1 - poisson.cdf(de_novo_reads - 1, mu)
+            
+            if poisson_p > 0.0001 or pp_dnm < 0.9:
+                continue
+            # exclude variants with allel frequencies too close to 0.5, since
+            # these should have been screened by the standard de novo variant
+            # calling pipeline
+            if abs(de_novo_reads/depth - 0.5) < 0.05:
+                continue
+            
+            line = [chrom, pos, ref_base, alt_base, poisson_p, pp_dnm, mu, de_novo_reads, mom_prp, dad_prp, dng_depth, depth]
+            table.append(line)
+
+    header = ["chrom", "pos", "ref", "alt", "poisson_p", "pp_dnm", "mu", \
+        "de_novo_reads", "mom_prp", "dad_prp", "dng_depth", "depth"]
+    
+    print(tabulate.tabulate(table, headers = header))
+
 def main():
     
-    standard, modified = get_options()
+    standard, modified, child_bam_path, mom_bam_path, dad_bam_path = get_options()
     
+    child_bam = pysam.Samfile(child_bam_path, "rb")
+    mom_bam = pysam.Samfile(mom_bam_path, "rb")
+    dad_bam = pysam.Samfile(dad_bam_path, "rb")
+
     mosaic = get_mosaic_only_de_novos(standard, modified)
+    
+    examine_variants(mosaic, child_bam, mom_bam, dad_bam)
+    
+    sys.stdout.write("chrom\tpos\tpp_dnm\tchild_read_depth\tmom_read_depth\tdad_read_depth\tchild_qual\tmom_qual\tdad_qual\n")
     
     for key in mosaic:
         var = mosaic[key]

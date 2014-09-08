@@ -116,8 +116,7 @@ class MosaicCalling(object):
         "8": 145138636, "9": 138394717, "10": 133797422, "11": 135086622,  \
         "12": 133275309, "13": 114364328, "14": 107043718, "15": 101991189, \
         "16": 90338345, "17": 83257441, "18": 80373285, "19": 58617616, \
-        "20": 64444167, "21": 46709983, "22": 50818468, "X": 156040895, \
-        "Y": 57227415}
+        "20": 64444167, "21": 46709983, "22": 50818468, "X": 156040895}
          
     def __init__(self, family, sex, bams_dir):
         
@@ -138,8 +137,6 @@ class MosaicCalling(object):
         self.dic_path = "seq_dic.txt"
         self.make_seq_dic_file()
         
-        self.make_corrected_vcf_headers([self.child_id, self.mother_id, self.father_id, self.child_id + ".standard_samtools"])
-        
         # find the sample BAMs
         self.child_bam = self.find_bam_path(self.child_id, self.bams_dir)
         self.mother_bam = self.find_bam_path(self.mother_id, self.bams_dir)
@@ -149,6 +146,8 @@ class MosaicCalling(object):
         # it has a different filename
         self.new_bam = self.child_bam[:-3] + "standard_samtools.bam"
         self.make_new_child_bam()
+        
+        self.make_corrected_vcf_headers([self.child_id, self.mother_id, self.father_id, self.child_id + ".standard_samtools"])
         
         # make sure there is a ped file available for the trio
         self.ped_path = os.path.join(os.path.dirname(self.child_bam), self.child_id + ".ped")
@@ -173,7 +172,7 @@ class MosaicCalling(object):
         
         if not os.path.exists(self.new_bam):
             # allow for if the symlink exists, but doesn't point to a valid path
-            if os.path.lexists(new_bam):
+            if os.path.lexists(self.new_bam):
                 os.remove(self.new_bam)
                 os.remove(self.new_bam + ".bai")
                 
@@ -456,7 +455,7 @@ class MosaicCalling(object):
         # denovogear
         merge = [self.bcftools, "merge", father, mother, child, "|"]
         pl_fix = ["python", self.pl_fixer, "|"]
-        bcf_convert = ["bcftools", "view", "-D", self.dic_path, "-Sb", "-", ">", bcf, ";"]
+        bcf_convert = ["bcftools", "view", "-D", self.dic_path, "-Sb", "-", ">", bcf]
         
         command = merge + pl_fix + bcf_convert
         
@@ -484,26 +483,24 @@ def main():
     families = open_families(PROBANDS_FILE, FAMILIES_PED_FILE)
     # extract_bams(families, TEMP_DIR)
     
-    temp = families[0]
-    family = temp[0]
-    sex = temp[1]
+    # temp = families[0]
+    # family = temp[0]
+    # sex = temp[1]
     
-    caller = MosaicCalling(family, sex, TEMP_DIR)
+    # caller = MosaicCalling(family, sex, TEMP_DIR)
     
-    chrom = "1"
-    start = "1"
-    stop = "5000000"
-    region = (chrom, start, stop)
-    
+    # chrom = "1"
+    # start = "1"
+    # stop = "5000000"
+    # region = (chrom, start, stop)
     # caller.call_mosaic_de_novos_in_region(region)
-    caller.call_mosaic_de_novos()
     
-    # for family, sex in families:
-        
-    #     caller = MosaicCalling(family, sex, TEMP_DIR)
-    #     caller.call_mosaic_de_novos()
+    # caller.call_mosaic_de_novos()
     
-
+    for family, sex in families:
+        caller = MosaicCalling(family, sex, TEMP_DIR)
+        caller.call_mosaic_de_novos()
+    
 
 if __name__ == '__main__':
     main()

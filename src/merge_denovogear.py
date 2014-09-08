@@ -1,4 +1,4 @@
-""" collects
+""" aggregates denovogear variant output from files for different genome regions
 """
 
 import os
@@ -7,7 +7,7 @@ import glob
 import argparse
 
 def get_options():
-    """
+    """ parse the command lines options for the script
     """
     
     parser = argparse.ArgumentParser(description="Fix PL fields in a VCF file.")
@@ -23,6 +23,12 @@ def get_options():
 
 def get_denovogear_vars_from_file(path):
     """ extracts variant lines from a denovogear output file
+    
+    Args:
+        path: path to a denovogear output file
+        
+    Returns:
+        nothing - instead writes variant lines to standard out
     """
     
     with open(path , "r") as f:
@@ -32,6 +38,16 @@ def get_denovogear_vars_from_file(path):
 
 def find_denovogear_paths(folder, path_pattern):
     """ selects denovogear output files by searching for the string pattern
+    
+    Args:
+        folder: path to folder containing denovogear output split across 
+            multiple chrom segments. Denovogear output filenames must contain
+            "denovogear" and end with ".dnm".
+        path_pattern: string used to select specific denovogear output files eg
+            "standard" or "modified".
+    
+    Returns:
+        list of denovogear output paths
     """
     
     paths = glob.glob(os.path.join(folder, "*denovogear*" + path_pattern + "*.dnm"))
@@ -41,7 +57,16 @@ def find_denovogear_paths(folder, path_pattern):
     return paths
 
 def aggregate_denovogear(folder, path_pattern, remove_files=False):
-    """ extract the variants from the individual de novogear files
+    """ extract the variants from the individual denovogear files
+    
+    Args:
+        folder: path to folder containing denovogear output split across 
+            multiple chrom segments. Denovogear output filenames must contain
+            "denovogear" and end with ".dnm".
+        path_pattern: string used to select specific denovogear output files eg
+            "standard" or "modified".
+        remove_files: True/False for whether to remove the individual denovogear
+            output files as we go
     """
     
     paths = find_denovogear_paths(folder, path_pattern)
