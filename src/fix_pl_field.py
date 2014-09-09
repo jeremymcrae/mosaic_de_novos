@@ -17,7 +17,6 @@ def get_options():
     
     return args.infile
 
-
 def get_header(f):
     """ get the header lines from a VCF
     
