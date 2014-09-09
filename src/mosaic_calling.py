@@ -4,6 +4,8 @@
 import os
 import argparse
 import subprocess
+import logging
+import datetime
 
 from mosaic_functions import get_sample_id_from_bam, make_corrected_vcf_header
 
@@ -21,6 +23,7 @@ def get_options():
     parser.add_argument("--sequence-dict", help="path to sequence dictionary")
     parser.add_argument("--ped", help="Path to pedigree file showing trio relationships")
     
+    # and define the region of the genome to call
     parser.add_argument("--chrom", help="Chromosome to find denovos in")
     parser.add_argument("--start", help="Region of chromosome to start examining for de novos")
     parser.add_argument("--stop", help="Region of chromosome to stop examining for de novos")
@@ -48,7 +51,17 @@ class MosaicCalling(object):
     male_codes = ["M", "Male", "male", "1"]
          
     def __init__(self, child_bam, mother_bam, father_bam, new_child_bam, sex, \
-        dic_path, ped_path):
+            dic_path, ped_path):
+        """ initiates the class with the BAM paths etc
+        
+        Args:
+            child_bam: path to proband's BAM file.
+            mother_bam: path to mother's BAM file.
+            father_bam: path to father's BAM file.
+            new_child_bam: path to proband's symlinked BAM file.
+            sex: sex of the probanddic_path: path to sequence dictionary file
+            ped_path: path to pedigree file defining the trio relationships
+        """
         
         if sex in self.female_codes:
             self.proband_sex = "2"
@@ -79,6 +92,13 @@ class MosaicCalling(object):
     def call_mosaic_de_novos_in_region(self, region):
         """ call the rest of the functions in this class, in the correct order, 
         and on the correct files
+        
+        Args:
+            region: tuple of (chrom, start nucleotide, stop nucleotide) strings
+                that define the region of the genome to examine for mosaic de novos
+        
+        Returns:
+            nothing
         """
         
         # run samtools, with the modified samtools used for the child
@@ -102,14 +122,12 @@ class MosaicCalling(object):
         
         Args:
             bam: path to bam filename
-            bcf: path to bcf file (usually located in same folder as bam)
             region: tuple of chrom, start and stop
+            modified: True/False for whether to use the modified samtools
         
         Returns:
-            bsub job ID for the genotype calling cluster job
+            nothing
         """
-        
-        print(bam)
         
         region_id = "{0}:{1}-{2}".format(*region)
         region_path = ".{0}.{1}-{2}".format(*region)
@@ -134,8 +152,8 @@ class MosaicCalling(object):
         Args:
             bam: path to bam file
             region: tuple of (chrom, start, stop) strings
-            samtools: Popen command from running samtools, contains the output
-                as a pipe.
+            samtools: Popen command from running samtools, contains samtools 
+                output in a pipe.
         
         Returns:
             nothing
@@ -146,7 +164,7 @@ class MosaicCalling(object):
         # set the path to the output VCF
         temp_vcf = os.path.splitext(bam)[0] + region_path + ".temp.vcf.gz"
         vcf = os.path.splitext(bam)[0] + region_path + ".vcf.gz"
-        header = os.path.dirname(bam) + "fixed_header.txt"
+        header = os.path.join(os.path.dirname(bam), "fixed_header.txt")
         
         # convert the samtools output to VCF
         to_vcf = subprocess.Popen([self.old_bcftools, "view", "-"], \
@@ -168,6 +186,18 @@ class MosaicCalling(object):
     
     def run_denovogear(self, child, mother, father, region, modify_string):
         """ merge the VCFs from the trio members into a multi-sample VCF
+        
+        Args:
+            child: path to proband's BAM file.
+            mother: path to mother's BAM file.
+            father: path to father's BAM file.
+            region: tuple of (chrom, start, stop) strings
+            modify_string: either "standard" or "modified" to indicate whether 
+                the proband's data was generated using the standard or modified
+                samtools (the modified samtools allows mosaic calling).
+        
+        Returns:
+            nothing
         """
         
         print(modify_string)
@@ -186,6 +216,16 @@ class MosaicCalling(object):
     
     def make_bcf_command(self, child, mother, father, bcf, region):
         """ we need to generate BCF for denovogear to work on
+        
+        Args:
+            child: path to proband's BAM file.
+            mother: path to mother's BAM file.
+            father: path to father's BAM file.
+            bcf: path to output BCF (binary call format) data to.
+            region: tuple of (chrom, start, stop) strings
+        
+        Returns:
+            nothing
         """
         
         region_path = ".{0}.{1}-{2}".format(*region)
@@ -211,6 +251,14 @@ class MosaicCalling(object):
         """ Use DNG to call de novo mutations. In this particular case, I use 
         v0.5. As always with DNG, the appropriate PED file (family.ped) has to 
         be in the working directory.
+        
+        Args:
+            bcf: path to BCF data.
+            dnm: path to write denovogear results to.
+            region: tuple of (chrom, start, stop) strings
+        
+        Returns:
+            nothing
         """
         
         dng_chr_type = "auto"
@@ -225,17 +273,32 @@ class MosaicCalling(object):
     
     def remove_vcf(self, sample_bam, region):
         """ remove the temporary VCF files for the region
+        
+        This relies on removing a file with the correct VCF filename, generated 
+        during the convert_to_vcf() method.
+        
+        Args:
+            sample_bam: path to bam file
+            region: tuple of (chrom, start, stop) strings
+        
+        Returns:
+            nothing
         """
         
         region_path = ".{0}.{1}-{2}".format(*region)
         
-        # set the paths to the individual VCF
+        # set the path to the individual VCF
         vcf = os.path.splitext(sample_bam)[0] + region_path + ".vcf.gz"
         
         os.remove(vcf)
         os.remove(vcf + ".tbi")
 
 def main():
+    """ runs mosaic calling for a single region of the genome in a single trio
+    """
+    
+    logging.basicConfig(filename="mosaic_de_novo_calling.log")
+    
     proband_bam, mother_bam, father_bam, alt_child_bam, proband_sex, \
         sequence_dict, ped, region = get_options()
         
