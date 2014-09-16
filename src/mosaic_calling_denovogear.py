@@ -7,7 +7,8 @@ import subprocess
 import logging
 import datetime
 
-from mosaic_functions import get_sample_id_from_bam, make_corrected_vcf_header
+from mosaic_functions import get_sample_id_from_bam, make_corrected_vcf_header, \
+    make_ped_for_trio, symlink_bam, make_seq_dic_file
 
 
 def get_options():
@@ -18,10 +19,7 @@ def get_options():
     parser.add_argument("--proband-bam", help="BAM file for proband")
     parser.add_argument("--mother-bam", help="BAM file for mother")
     parser.add_argument("--father-bam", help="BAM File for father")
-    parser.add_argument("--alt-child-bam", help="Alternate BAM file for proband (symlinked from proband BAM)")
     parser.add_argument("--proband-sex", help="Gender of proband")
-    parser.add_argument("--sequence-dict", help="path to sequence dictionary")
-    parser.add_argument("--ped", help="Path to pedigree file showing trio relationships")
     
     # and define the region of the genome to call
     parser.add_argument("--chrom", help="Chromosome to find denovos in")
@@ -49,18 +47,18 @@ class MosaicCalling(object):
     
     female_codes = ["F", "Female", "female", "2"]
     male_codes = ["M", "Male", "male", "1"]
+    
+    dic_path = "seq_dic.txt"
+    make_seq_dic_file(dic_path)
          
-    def __init__(self, child_bam, mother_bam, father_bam, new_child_bam, sex, \
-            dic_path, ped_path):
+    def __init__(self, child_bam, mother_bam, father_bam, sex):
         """ initiates the class with the BAM paths etc
         
         Args:
             child_bam: path to proband's BAM file.
             mother_bam: path to mother's BAM file.
             father_bam: path to father's BAM file.
-            new_child_bam: path to proband's symlinked BAM file.
             sex: sex of the probanddic_path: path to sequence dictionary file
-            ped_path: path to pedigree file defining the trio relationships
         """
         
         if sex in self.female_codes:
@@ -70,8 +68,9 @@ class MosaicCalling(object):
         else:
             raise ValueError("unknown gender: " + sex)
         
-        self.dic_path = dic_path
-        self.ped_path = ped_path
+        # make sure there is a ped file available for the trio
+        self.ped_path = os.path.join(os.path.dirname(child_bam), "family.ped")
+        make_ped_for_trio(child_bam, mother_bam, father_bam, sex, self.ped_path)
         
         # find the sample BAMs
         self.child_bam = child_bam
@@ -80,7 +79,8 @@ class MosaicCalling(object):
         
         # make a new bam for the child for using with the standard samtools, so
         # it has a different filename
-        self.new_bam = new_child_bam
+        self.new_bam = self.child_bam[:-3] + "standard_samtools.bam"
+        new_child_bam = symlink_bam(self.child_bam, self.new_bam)
         
         # make header files that provide more info than standard samtools output
         # which is required by a recent bcftools version.
@@ -200,8 +200,6 @@ class MosaicCalling(object):
             nothing
         """
         
-        print(modify_string)
-        
         region_path = ".{0}.{1}-{2}".format(*region)
         
         child_dir = os.path.dirname(child)
@@ -248,9 +246,10 @@ class MosaicCalling(object):
             self.dic_path, "-Sb", "-"], stdin=pl_fix.stdout, stdout=open(bcf, "w"))
     
     def construct_dng_command(self, bcf, dnm, region):
-        """ Use DNG to call de novo mutations. In this particular case, I use 
-        v0.5. As always with DNG, the appropriate PED file (family.ped) has to 
-        be in the working directory.
+        """ Use denovogear to call de novo mutations in a BCF. 
+        
+        In this particular case, I use denovogear v0.5. As always with DNG, the 
+        appropriate PED file (family.ped) has to be in the working directory.
         
         Args:
             bcf: path to BCF data.
@@ -275,7 +274,10 @@ class MosaicCalling(object):
         """ remove the temporary VCF files for the region
         
         This relies on removing a file with the correct VCF filename, generated 
-        during the convert_to_vcf() method.
+        during the convert_to_vcf() method. This function runs after bcf 
+        conversion and denovogear analysis, since we construct two BCFs, which
+        means we have to call this after both have completed, rather than 
+        cleaning the files up at the end of th function.
         
         Args:
             sample_bam: path to bam file
@@ -299,11 +301,9 @@ def main():
     
     logging.basicConfig(filename="mosaic_de_novo_calling.log")
     
-    proband_bam, mother_bam, father_bam, alt_child_bam, proband_sex, \
-        sequence_dict, ped, region = get_options()
-        
-    caller = MosaicCalling(proband_bam, mother_bam, father_bam, alt_child_bam, \
-        proband_sex, sequence_dict, ped)
+    proband_bam, mother_bam, father_bam, proband_sex, region = get_options()
+    
+    caller = MosaicCalling(proband_bam, mother_bam, father_bam, proband_sex)
     
     caller.call_mosaic_de_novos_in_region(region)
     

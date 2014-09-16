@@ -79,10 +79,6 @@ def main():
     families = open_families(PROBANDS_FILE, FAMILIES_PED_FILE)
     # extract_bams(families, TEMP_DIR)
     
-    dic_path = "seq_dic.txt"
-    make_seq_dic_file(dic_path)
-    
-    
     temp = families[0]
     family = temp[0]
     sex = temp[1]
@@ -95,25 +91,17 @@ def main():
     mother_bam = find_bam_path(mother_id, TEMP_DIR)
     father_bam = find_bam_path(father_id, TEMP_DIR)
     
-    new_bam = child_bam[:-3] + "standard_samtools.bam"
-    new_child_bam = symlink_bam(child_bam, new_bam)
+    caller = MosaicCalling(child_bam, mother_bam, father_bam, sex)
     
-    # make sure there is a ped file available for the trio
-    ped_path = os.path.join(os.path.dirname(child_bam), child_id + ".ped")
-    make_ped_for_trio(child_bam, mother_bam, father_bam, sex, ped_path)
-    
-    # caller = MosaicCalling(child_id, mother_id, father_id, child_bam, mother_bam, father_bam, new_bam, sex, dic_path, ped_path)
-    
-    # chrom = "1"
-    # start = "1"
-    # # start = "4990000"
-    # stop = "5000000"
-    # region = (chrom, start, stop)
-    # caller.call_mosaic_de_novos_in_region(region)
+    chrom = "1"
+    start = "1"
+    stop = "5000000"
+    region = (chrom, start, stop)
+    caller.call_mosaic_de_novos_in_region(region)
     
     
-    # submit jobs to the cluster to call de novos
-    call_mosaic_de_novos(child_bam, mother_bam, father_bam, new_bam, sex, dic_path, ped_path)
+    # # submit jobs to the cluster to call de novos
+    # call_mosaic_de_novos(child_bam, mother_bam, father_bam, sex)
     
     # for family, sex in families:
         
@@ -125,14 +113,7 @@ def main():
     #     mother_bam = find_bam_path(mother_id, TEMP_DIR)
     #     father_bam = find_bam_path(father_id, TEMP_DIR)
         
-    #     new_bam = child_bam[:-3] + "standard_samtools.bam"
-    #     new_child_bam = symlink_bam(child_bam, new_bam)
-        
-    #     # make sure there is a ped file available for the trio
-    #     ped_path = os.path.join(os.path.dirname(child_bam), child_id + ".ped")
-    #     make_ped_for_trio(child_bam, mother_bam, father_bam, sex, ped_path)
-        
-    #     caller = MosaicCalling(child_id, mother_id, father_id, child_bam, mother_bam, father_bam, new_bam, sex, dic_path, ped_path)
+    #     caller = MosaicCalling(child_bam, mother_bam, father_bam, sex)
     #     caller.call_mosaic_de_novos()
     
 

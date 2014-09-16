@@ -14,8 +14,7 @@ chrom_lengths = {"1": 248956422, "2": 242193529, "3": 198295559,
     "16": 90338345, "17": 83257441, "18": 80373285, "19": 58617616, \
     "20": 64444167, "21": 46709983, "22": 50818468, "X": 156040895}
 
-def call_mosaic_de_novos(child_bam, mother_bam,\
-        father_bam, new_bam, sex, dic_path, ped_path):
+def call_mosaic_de_novos(child_bam, mother_bam, father_bam, sex):
     """ run through all of the chroms, region by region
     """
     
@@ -33,14 +32,11 @@ def call_mosaic_de_novos(child_bam, mother_bam,\
             
             job_id = "{0}:{1}-{2}".format(chrom, start, end) + get_random_string()
             
-            command = ["python3", "src/mosaic_calling.py", \
+            command = ["python3", "src/mosaic_calling_denovogear.py", \
                 "--proband-bam", child_bam, \
                 "--mother-bam", mother_bam, \
                 "--father-bam", father_bam, \
-                "--alt-child-bam", new_bam, \
                 "--proband-sex", sex, \
-                "--sequence-dict", dic_path, \
-                "--ped", ped_path, \
                 "--chrom", chrom, \
                 "--start", str(start), \
                 "--stop", str(end)]
@@ -57,17 +53,18 @@ def make_corrected_vcf_header(bam_path):
     # samtools
     header = ["##fileformat=VCFv4.1\n",
         "##samtoolsVersion=0.1.18 (r982:295)",
-        "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Total Depth\">\n",
-        "##INFO=<ID=I16,Number=.,Type=Integer,Description=\"something\">\n",
-        "##INFO=<ID=INDEL,Number=0,Type=Flag,Description=\"INDEL type\">\n",
-        "##INFO=<ID=VDB,Number=1,Type=Float,Description=\"unknown\">\n",
-        "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Read Depth\">\n",
-        "##FORMAT=<ID=PL,Number=G,Type=Integer,Description=\"Phred Likelihood\">\n",
+        "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Raw read depth\">\n",
+        "##INFO=<ID=I16,Number=.,Type=Integer,Description=\"Auxiliary tag used for calling, see description of bcf_callret1_t in bam2bcf.h\">\n",
+        "##INFO=<ID=INDEL,Number=0,Type=Flag,Description=\"Indicates that the variant is an INDEL.\">\n",
+        "##INFO=<ID=VDB,Number=1,Type=Float,Description=\"Variant Distance Bias for filtering splice-site artefacts in RNA-seq data (bigger is better)\">\n",
+        "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Number of high-quality bases\">\n",
+        "##FORMAT=<ID=PL,Number=G,Type=Integer,Description=\"List of Phred-scaled genotype likelihoods\">\n",
         "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT"]
     
     bam_dir = os.path.dirname(bam_path)
     new_path = os.path.join(bam_dir, "fixed_header.txt")
     
+    # don't remake the corrected header if the file already exists
     if os.path.exists(new_path):
         return
     
@@ -121,32 +118,39 @@ def symlink_bam(current_path, new_path):
         nothing
     """
     
-    if not os.path.exists(new_path):
-        # allow for if the symlink exists, but doesn't point to a valid path
-        if os.path.lexists(new_path):
-            os.remove(new_path)
-            os.remove(new_path + ".bai")
-            
-        os.symlink(current_path, new_path)
-        os.symlink(current_path + ".bai", new_path + ".bai")
+    # don't relink the BAM if the symlink already exists
+    if os.path.exists(new_path):
+        return
+    
+    # allow for if the symlink exists, but doesn't point to a valid path
+    if os.path.lexists(new_path):
+        os.remove(new_path)
+        os.remove(new_path + ".bai")
+        
+    os.symlink(current_path, new_path)
+    os.symlink(current_path + ".bai", new_path + ".bai")
 
 def make_seq_dic_file(dic_path):
     """ make sure we have a contig dictionary file available for bcftools
     
     Args:
-        dic_path:
+        dic_path: path to the sequence dictionary file
         
     Returns:
         nothing
     """
     
-    if not os.path.exists(dic_path):
-        seq_dic = open(dic_path, "w")
-        chroms = list(range(1, 22)) + ["X", "Y"]
-        chroms = [str(x) for x in chroms]
-        chroms = "\n".join(chroms) + "\n"
-        seq_dic.write(chroms)
-        seq_dic.close()
+    # don't remake the sequence dictionary if the file already exists
+    if os.path.exists(dic_path):
+        return
+    
+    chroms = list(range(1, 22)) + ["X", "Y"]
+    chroms = [str(x) for x in chroms]
+    chroms = "\n".join(chroms) + "\n"
+    
+    seq_dic = open(dic_path, "w")
+    seq_dic.write(chroms)
+    seq_dic.close()
 
 def find_bam_path(sample_id, bam_dir):
     """ find the path to the extracted BAM file
