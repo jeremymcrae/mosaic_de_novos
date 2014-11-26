@@ -4,7 +4,6 @@
 import os
 import argparse
 import subprocess
-import logging
 import datetime
 
 from mosaic_functions import get_sample_id_from_bam, make_corrected_vcf_header, \
@@ -31,19 +30,21 @@ def get_options():
     region = (args.chrom, args.start, args.stop)
     
     return args.proband_bam, args.mother_bam, args.father_bam, \
-        args.alt_child_bam, args.proband_sex, args.sequence_dict, args.ped, region
+        args.proband_sex, region
 
 class MosaicCalling(object):
     """ class to construct and run the mosaic de novo calling commands for a trio
     """
     
+    hgi = "/software/hgi/pkglocal"
+    
     denovogear = "/nfs/users/nfs_s/sa9/scripts/denovogear/denovogear-0.5/build/src/denovogear"
     reference = "/software/ddd/resources/v1.2/hs37d5.fasta"
-    standard_samtools = "/software/vertres/bin-external/samtools-0.1.18"
+    standard_samtools = os.path.join(hgi, "samtools-0.1.19", "bin", "samtools")
     modified_samtools = "/nfs/team29/aw15/samtoolsMod/samtools"
     old_bcftools = "/software/vertres/bin-external/bcftools-0.1.18"
-    new_bcftools = "/nfs/users/nfs_j/jm33/apps/bcftools/bcftools" # version 1.0 is necessary for the reheader command
-    pl_fixer = "/nfs/users/nfs_j/jm33/apps/mosaic_de_novos/src/fix_pl_field.py"
+    new_bcftools = os.path.join(hgi, "bcftools-1.1", "bin", "bcftools") # version 1.0+ is necessary for the reheader command
+    pl_fixer = os.path.join(os.path.dirname(__file__), "fix_pl_field.py")
     
     female_codes = ["F", "Female", "female", "2"]
     male_codes = ["M", "Male", "male", "1"]
@@ -269,6 +270,8 @@ class MosaicCalling(object):
         dng = subprocess.call([self.denovogear, "dnm", dng_chr_type, "--ped", \
             self.ped_path, "--bcf", bcf], stdout=open(dnm, "w"), \
             stderr=open(os.devnull, "w"))
+        
+        os.remove(bcf)
     
     def remove_vcf(self, sample_bam, region):
         """ remove the temporary VCF files for the region
@@ -299,7 +302,7 @@ def main():
     """ runs mosaic calling for a single region of the genome in a single trio
     """
     
-    logging.basicConfig(filename="mosaic_de_novo_calling.log")
+    # logging.basicConfig(filename="mosaic_de_novo_calling.log")
     
     proband_bam, mother_bam, father_bam, proband_sex, region = get_options()
     

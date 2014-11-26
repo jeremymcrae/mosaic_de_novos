@@ -79,42 +79,41 @@ def main():
     families = open_families(PROBANDS_FILE, FAMILIES_PED_FILE)
     # extract_bams(families, TEMP_DIR)
     
-    temp = families[0]
-    family = temp[0]
-    sex = temp[1]
+    # temp = families[0]
+    # family = temp[0]
+    # sex = temp[1]
     
-    child_id = family["child"]
-    mother_id = family["mother"]
-    father_id = family["father"]
+    # child_id = family["child"]
+    # mother_id = family["mother"]
+    # father_id = family["father"]
     
-    child_bam = find_bam_path(child_id, TEMP_DIR)
-    mother_bam = find_bam_path(mother_id, TEMP_DIR)
-    father_bam = find_bam_path(father_id, TEMP_DIR)
+    # child_bam = find_bam_path(child_id, TEMP_DIR)
+    # mother_bam = find_bam_path(mother_id, TEMP_DIR)
+    # father_bam = find_bam_path(father_id, TEMP_DIR)
     
-    caller = MosaicCalling(child_bam, mother_bam, father_bam, sex)
+    # caller = MosaicCalling(child_bam, mother_bam, father_bam, sex)
     
-    chrom = "1"
-    start = "1"
-    stop = "5000000"
-    region = (chrom, start, stop)
-    caller.call_mosaic_de_novos_in_region(region)
-    
+    # # call a single region
+    # chrom = "1"
+    # start = "1"
+    # stop = "5000000"
+    # region = (chrom, start, stop)
+    # caller.call_mosaic_de_novos_in_region(region)
     
     # # submit jobs to the cluster to call de novos
     # call_mosaic_de_novos(child_bam, mother_bam, father_bam, sex)
     
-    # for family, sex in families:
+    for family, sex in families:
         
-    #     child_id = family["child"]
-    #     mother_id = family["mother"]
-    #     father_id = family["father"]
+        child_id = family["child"]
+        mother_id = family["mother"]
+        father_id = family["father"]
         
-    #     child_bam = find_bam_path(child_id, TEMP_DIR)
-    #     mother_bam = find_bam_path(mother_id, TEMP_DIR)
-    #     father_bam = find_bam_path(father_id, TEMP_DIR)
+        child_bam = find_bam_path(child_id, TEMP_DIR)
+        mother_bam = find_bam_path(mother_id, TEMP_DIR)
+        father_bam = find_bam_path(father_id, TEMP_DIR)
         
-    #     caller = MosaicCalling(child_bam, mother_bam, father_bam, sex)
-    #     caller.call_mosaic_de_novos()
+        call_mosaic_de_novos(child_bam, mother_bam, father_bam, sex)
     
 
 if __name__ == '__main__':

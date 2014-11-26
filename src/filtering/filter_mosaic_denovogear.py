@@ -8,7 +8,7 @@ from __future__ import division
 import argparse
 import sys
 import pysam
-from src.parse_denovogear import ParseDenovogear
+from src.filter.parse_denovogear import ParseDenovogear
 import tabulate
 from scipy.stats import poisson
 

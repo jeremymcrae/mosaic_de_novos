@@ -43,7 +43,6 @@ def call_mosaic_de_novos(child_bam, mother_bam, father_bam, sex):
             
             submit_bsub_job(command, job_id, dependent_id=None, memory=500)
             i += 1
-            sys.exit() 
 
 def make_corrected_vcf_header(bam_path):
     """ makes a header file that fixes the lack of explanatory lines
