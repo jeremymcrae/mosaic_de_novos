@@ -7,10 +7,12 @@ from __future__ import division
 
 import argparse
 import sys
+
 import pysam
-from src.filter.parse_denovogear import ParseDenovogear
-import tabulate
 from scipy.stats import poisson
+import tabulate
+
+from src.filter.parse_denovogear import ParseDenovogear
 
 IS_PYTHON2 = sys.version_info[0] == 2
 IS_PYTHON3 = sys.version_info[0] == 3
@@ -82,18 +84,15 @@ def count_bases(bam, chrom, pos, max_coverage=1e10, min_qual=0):
                 break
             
             # convert the quality score to integer
-            qual = read.alignment.qual[read.qpos]
+            qual = read.alignment.qual[read.query_position]
             if IS_PYTHON2: 
                 qual = ord(qual)
-            qual = qual - 33
             
             if qual < min_qual: # ignore low qual reads
                 continue
             
             # get the base call as a string
-            base = read.alignment.seq[read.qpos]
-            if IS_PYTHON3:
-                base = chr(base)
+            base = read.alignment.seq[read.query_position]
             
             bases[base] += 1
     
@@ -164,9 +163,9 @@ def main():
     
     standard, modified, child_bam_path, mom_bam_path, dad_bam_path = get_options()
     
-    child_bam = pysam.Samfile(child_bam_path, "rb")
-    mom_bam = pysam.Samfile(mom_bam_path, "rb")
-    dad_bam = pysam.Samfile(dad_bam_path, "rb")
+    child_bam = pysam.AlignmentFile(child_bam_path)
+    mom_bam = pysam.AlignmentFile(mom_bam_path)
+    dad_bam = pysam.AlignmentFile(dad_bam_path)
 
     mosaic = get_mosaic_only_de_novos(standard, modified)
     

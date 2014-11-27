@@ -5,10 +5,12 @@ import os
 import argparse
 import subprocess
 import datetime
+import logging
 
 from mosaic_functions import get_sample_id_from_bam, make_corrected_vcf_header, \
     make_ped_for_trio, symlink_bam, make_seq_dic_file
 
+logging.basicConfig(filename='mosaic_calling.log',level=logging.DEBUG)
 
 def get_options():
     """ parse the command line options for the script
@@ -132,6 +134,7 @@ class MosaicCalling(object):
         
         region_id = "{0}:{1}-{2}".format(*region)
         region_path = ".{0}.{1}-{2}".format(*region)
+        logging.info("calling genotypes for {0} in {1}".format(region_path, bam))
         
         assert os.path.exists(bam)
         assert os.path.exists(self.reference)
@@ -161,6 +164,7 @@ class MosaicCalling(object):
         """
         
         region_path = ".{0}.{1}-{2}".format(*region)
+        logging.info("converting samtools output to vcf for {0} in {1}".format(region_path, bam))
         
         # set the path to the output VCF
         temp_vcf = os.path.splitext(bam)[0] + region_path + ".temp.vcf.gz"
@@ -169,8 +173,7 @@ class MosaicCalling(object):
         
         # convert the samtools output to VCF
         to_vcf = subprocess.Popen([self.old_bcftools, "view", "-"], \
-            stdin=samtools.stdout, \
-            stdout=subprocess.PIPE)
+            stdin=samtools.stdout, stdout=subprocess.PIPE)
         
         # compress and tabix the initial VCF output
         bgzip = subprocess.call(["bgzip"], stdin=to_vcf.stdout, stdout=open(temp_vcf, "w"))
@@ -227,12 +230,13 @@ class MosaicCalling(object):
             nothing
         """
         
-        region_path = ".{0}.{1}-{2}".format(*region)
+        region_path = "{0}.{1}-{2}".format(*region)
+        logging.info("preparing bcf for {0} in {1}".format(region_path, child))
         
         # set the paths to the individual VCFs
-        child = os.path.splitext(child)[0] + region_path + ".vcf.gz"
-        mother = os.path.splitext(mother)[0] + region_path + ".vcf.gz"
-        father = os.path.splitext(father)[0] + region_path + ".vcf.gz"
+        child = "{0}.{1}.vcf.gz".format(os.path.splitext(child)[0], region_path)
+        mother = "{0}.{1}.vcf.gz".format(os.path.splitext(mother)[0], region_path)
+        father = "{0}.{1}.vcf.gz".format(os.path.splitext(father)[0], region_path)
         
         # merge the trio VCFs
         merge = subprocess.Popen([self.new_bcftools, "merge", father, mother, \
@@ -260,6 +264,9 @@ class MosaicCalling(object):
         Returns:
             nothing
         """
+        
+        region_path = "{0}.{1}-{2}".format(*region)
+        logging.info("running denovogear for {0} in {1}".format(region_path, child))
         
         dng_chr_type = "auto"
         if region[0] == "X" and self.proband_sex in self.male_codes:

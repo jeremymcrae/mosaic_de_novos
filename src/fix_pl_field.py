@@ -52,7 +52,11 @@ def process_vcf_line(line):
     """
     
     line = line.rstrip().split("\t")
-    format = line[8]
+    try:
+        format = line[8]
+    except IndexError:
+        sys.exit("failed with line\n\n{0}\n".format(line))
+    
     format_fields = format.split(":")
     
     pl_pos = format_fields.index("PL")

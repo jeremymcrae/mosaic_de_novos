@@ -10,7 +10,7 @@ def get_options():
     """ parse the command lines options for the script
     """
     
-    parser = argparse.ArgumentParser(description="Fix PL fields in a VCF file.")
+    parser = argparse.ArgumentParser(description="Mereg denovogear output.")
     parser.add_argument("--remove-files", action="store_true", default=False, \
         help="whether to delete the individual denovogear files as we go")
     parser.add_argument("--folder", help="folder containing denovogear output")
@@ -50,9 +50,32 @@ def find_denovogear_paths(folder, path_pattern):
         list of denovogear output paths
     """
     
-    paths = glob.glob(os.path.join(folder, "*denovogear*" + path_pattern + "*.dnm"))
+    paths = glob.glob(os.path.join(folder, "*denovogear*{0}*.dnm".format(path_pattern)))
     
-    # sort the paths correctly?
+    # sort the paths correctly, which assumes the basename is something like: 
+    # sample_id.denovogear.chrom.start-end.path_pattern.dnm
+    regions = [path.split("denovogear.")[1] for path in paths]
+    regions = [region.split("-")[0] for region in regions]
+    
+    wrong_file = "{0}.dnm".format(path_pattern)
+    if regions.count(wrong_file) > 0:
+        index = regions.index(wrong_file)
+        del regions[index]
+        del paths[index]
+    
+    chroms = [region.split(".")[0] for region in regions]
+    starts = [int(region.split(".")[1]) for region in regions]
+    
+    # convert all the X and Y chroms
+    chrom_strings = [str(x) for x in range(1, 23)]
+    chrom_dict = dict(zip(chrom_strings, range(1, 23)))
+    chrom_dict.update({"X": 23, "Y": 24})
+    chroms = [chrom_dict[chrom] for chrom in chroms]
+    
+    # we sort using the chrom and start
+    paths = zip(zip(chroms, starts), paths)
+    paths = sorted(paths)
+    paths = [path[1] for path in paths]
     
     return paths
 

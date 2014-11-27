@@ -19,8 +19,9 @@ def call_mosaic_de_novos(child_bam, mother_bam, father_bam, sex):
     """
     
     increment = 50000000
+    child_id = os.path.basename(os.path.splitext(child_bam)[0])
     
-    i = 1
+    job_ids = []
     for chrom in chrom_lengths:
         max_length = chrom_lengths[chrom]
         start = 1
@@ -41,8 +42,29 @@ def call_mosaic_de_novos(child_bam, mother_bam, father_bam, sex):
                 "--start", str(start), \
                 "--stop", str(end)]
             
-            submit_bsub_job(command, job_id, dependent_id=None, memory=500)
-            i += 1
+            submit_bsub_job(command, job_id, memory=500)
+            job_ids.append(job_id)
+    
+    # merge all the denovogear output for the standard samtools
+    folder = os.path.dirname(os.path.splitext(child_bam)[0])
+    job_id = "merge_standard_denovogear" + get_random_string()
+    command = ["python3", "src/filtering/merge_denovogear.py", \
+        "--folder", folder, \
+        "--remove-files", \
+        "--pattern", "standard", \
+        ">", os.path.join(folder, "{0}.denovogear.standard.dnm".format(child_id))]
+    
+    submit_bsub_job(command, job_id, dependent_id=job_ids)
+    
+    # merge all the denovogear output for the modified samtools
+    job_id = "merge_modified_denovogear" + get_random_string()
+    command = ["python3", "src/filtering/merge_denovogear.py", \
+        "--folder", folder, \
+        "--remove-files", \
+        "--pattern", "modified", \
+        ">", os.path.join(folder, "{0}.denovogear.modified.dnm".format(child_id))]
+    
+    submit_bsub_job(command, job_id, dependent_id=job_ids)
 
 def make_corrected_vcf_header(bam_path):
     """ makes a header file that fixes the lack of explanatory lines
@@ -51,11 +73,15 @@ def make_corrected_vcf_header(bam_path):
     # here's a VCF header that includes the potential VCF output types from
     # samtools
     header = ["##fileformat=VCFv4.1\n",
-        "##samtoolsVersion=0.1.18 (r982:295)",
+        "##samtoolsVersion=0.1.18 (r982:295)\n",
         "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Raw read depth\">\n",
         "##INFO=<ID=I16,Number=.,Type=Integer,Description=\"Auxiliary tag used for calling, see description of bcf_callret1_t in bam2bcf.h\">\n",
         "##INFO=<ID=INDEL,Number=0,Type=Flag,Description=\"Indicates that the variant is an INDEL.\">\n",
+        "##INFO=<ID=RPB,Number=1,Type=Float,Description=\"Mann-Whitney U test of Read Position Bias (bigger is better).\">\n",
         "##INFO=<ID=VDB,Number=1,Type=Float,Description=\"Variant Distance Bias for filtering splice-site artefacts in RNA-seq data (bigger is better)\">\n",
+        "##INFO=<ID=INDEL,Number=1,Type=Flag,Description=\"Indicates that the variant is an INDEL.\">\n",
+        "##INFO=<ID=IS,Number=.,Type=Float,Description=\"Indel score?\">\n",
+        "##INFO=<ID=QS,Number=.,Type=Float,Description=\"Auxiliary tag used for calling.\">\n",
         "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Number of high-quality bases\">\n",
         "##FORMAT=<ID=PL,Number=G,Type=Integer,Description=\"List of Phred-scaled genotype likelihoods\">\n",
         "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT"]
@@ -97,6 +123,8 @@ def submit_bsub_job(command, job_id, dependent_id=None, memory=None):
     
     dependent = ""
     if dependent_id is not None:
+        if type(dependent_id) == list:
+            dependent_id = " && ".join(dependent_id)
         dependent = "-w \"{0}\"".format(dependent_id)
     
     preamble = ["bsub", job, dependent, "-q", "normal", "-o", "bjob_output.txt", mem]
@@ -212,7 +240,7 @@ def get_sample_id_from_bam(bam_path):
         sample ID as string
     """
     
-    bam = pysam.Samfile(bam_path)
+    bam = pysam.AlignmentFile(bam_path)
     read_group = bam.header["RG"]
     
     # select the first read group, and the sample ("SM") value
