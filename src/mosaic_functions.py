@@ -14,9 +14,14 @@ chrom_lengths = {"1": 248956422, "2": 242193529, "3": 198295559,
     "16": 90338345, "17": 83257441, "18": 80373285, "19": 58617616, \
     "20": 64444167, "21": 46709983, "22": 50818468, "X": 156040895}
 
+TEMP_DIR = "/lustre/scratch113/projects/ddd/users/jm33/bams"
+BAM_EXTRACTOR = "/nfs/users/nfs_j/jm33/apps/VICAR/python/extract_bam.py"
+
 def call_mosaic_de_novos(child_bam, mother_bam, father_bam, sex):
     """ run through all of the chroms, region by region
     """
+    
+    # extract_bams(family, TEMP_DIR)
     
     increment = 50000000
     child_id = os.path.basename(os.path.splitext(child_bam)[0])
@@ -42,7 +47,7 @@ def call_mosaic_de_novos(child_bam, mother_bam, father_bam, sex):
                 "--start", str(start), \
                 "--stop", str(end)]
             
-            submit_bsub_job(command, job_id, memory=500)
+            submit_bsub_job(command, job_id, memory=500, requeue_code=99)
             job_ids.append(job_id)
     
     # merge all the denovogear output for the standard samtools
@@ -66,12 +71,38 @@ def call_mosaic_de_novos(child_bam, mother_bam, father_bam, sex):
     
     submit_bsub_job(command, job_id, dependent_id=job_ids)
 
-def make_corrected_vcf_header(bam_path):
-    """ makes a header file that fixes the lack of explanatory lines
+def extract_bams(family, bams_dir):
+    """ make sure we have bam files for all the family members
+    
+    Args:
+        family: tuple of (family dict, sex)
+        bams_dir: folder to store the BAM file into
     """
     
-    # here's a VCF header that includes the potential VCF output types from
-    # samtools
+    sex = family[1]
+    family = family[0]
+    
+    log_dir = "bam_extraction_logs"
+    
+    if not os.path.exists(log_dir):
+        os.mkdir(log_dir)
+    
+    for individual in family:
+        sample_id = family[individual]
+        
+        command = ["python", BAM_EXTRACTOR, "--sample-id", sample_id, "--dir", bams_dir]
+        log = os.path.join(log_dir, sample_id + ".bjob_output.txt")
+        submit_bsub_job(command, logfile=log)
+
+def make_corrected_vcf_header(bam_path, output=None):
+    """ makes a header file that fixes the lack of explanatory lines
+    
+    Args:
+        bam_path: path to the bam file that needs a corrected VCF header.
+        output: potential file handle for the header file
+    """
+    
+    # here's a VCF header that includes the VCF output types from samtools
     header = ["##fileformat=VCFv4.1\n",
         "##samtoolsVersion=0.1.18 (r982:295)\n",
         "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Raw read depth\">\n",
@@ -83,25 +114,21 @@ def make_corrected_vcf_header(bam_path):
         "##INFO=<ID=IS,Number=.,Type=Float,Description=\"Indel score?\">\n",
         "##INFO=<ID=QS,Number=.,Type=Float,Description=\"Auxiliary tag used for calling.\">\n",
         "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Number of high-quality bases\">\n",
-        "##FORMAT=<ID=PL,Number=G,Type=Integer,Description=\"List of Phred-scaled genotype likelihoods\">\n",
-        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT"]
+        "##FORMAT=<ID=PL,Number=G,Type=Integer,Description=\"List of Phred-scaled genotype likelihoods\">\n"]
     
     bam_dir = os.path.dirname(bam_path)
-    new_path = os.path.join(bam_dir, "fixed_header.txt")
-    
-    # don't remake the corrected header if the file already exists
-    if os.path.exists(new_path):
-        return
+    if output is None:
+        new_path = os.path.join(bam_dir, "fixed_header.txt")
+        output = open(new_path, "w")
     
     alt_id = get_sample_id_from_bam(bam_path)
-    header[-1] = header[-1] + "\t" + alt_id + "\n"
+    header.append("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\t" + alt_id + "\n")
     
-    # and write the final line that includes the alt ID
-    output = open(new_path, "w")
+    # write the header
     output.writelines(header)
-    output.close()
+    output.flush()
 
-def submit_bsub_job(command, job_id, dependent_id=None, memory=None):
+def submit_bsub_job(command, job_id, dependent_id=None, memory=None, requeue_code=None, logfile=None):
     """ construct a bsub job submission command
     
     Args:
@@ -115,19 +142,30 @@ def submit_bsub_job(command, job_id, dependent_id=None, memory=None):
         nothing
     """
     
+    if job_id is None:
+        job_id = get_random_string()
+    
     job = "-J \"{0}\"".format(job_id)
     
     mem = ""
     if memory is not None:
         mem = "-R 'select[mem>{0}] rusage[mem={0}]' -M {0}".format(memory)
     
+    requeue = ""
+    if requeue_code is not None:
+        requeue = "-Q 'EXCLUDE({0})'".format(requeue_code)
+    
     dependent = ""
     if dependent_id is not None:
         if type(dependent_id) == list:
             dependent_id = " && ".join(dependent_id)
-        dependent = "-w \"{0}\"".format(dependent_id)
+        dependent = "-w '{0}'".format(dependent_id)
     
-    preamble = ["bsub", job, dependent, "-q", "normal", "-o", "bjob_output.txt", mem]
+    log = "bjob_output.txt"
+    if logfile is not None:
+        log = logfile
+    
+    preamble = ["bsub", job, dependent, requeue, "-q", "normal", "-o", log, mem]
     command = ["bash", "-c", "\""] + command + ["\""]
     
     command = " ".join(preamble + command)
@@ -190,7 +228,7 @@ def find_bam_path(sample_id, bam_dir):
         path to bam file for sample
     """
     
-    sample_dir = os.path.join(bam_dir, sample_id.rstrip(".standard_samtools"))
+    sample_dir = os.path.join(bam_dir, sample_id)
     sample_bam = os.path.join(sample_dir, sample_id + ".bam")
     
     return sample_bam

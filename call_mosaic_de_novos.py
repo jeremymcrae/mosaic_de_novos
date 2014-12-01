@@ -9,13 +9,13 @@ import os
 import subprocess
 
 from src.mosaic_functions import symlink_bam, make_seq_dic_file, \
-    make_ped_for_trio, find_bam_path, call_mosaic_de_novos
+    make_ped_for_trio, find_bam_path, call_mosaic_de_novos, extract_bams
 from src.mosaic_calling_denovogear import MosaicCalling
 
 PROBANDS_FILE = "/nfs/users/nfs_j/jm33/apps/mosaic_de_novos/data/probands_without_diagnoses.txt"
 TEMP_DIR = "/lustre/scratch113/projects/ddd/users/jm33/bams"
 FAMILIES_PED_FILE = "/nfs/ddd0/Data/datafreeze/1133trios_20131218/family_relationships.shared.txt"
-BAM_EXTRACTOR = "/nfs/users/nfs_j/jm33/apps/VICAR/python/extract_bam.py"
+
 
 def open_probands_list(filename):
     """ get a list of sample IDs from a file
@@ -49,6 +49,7 @@ def open_families(probands_filename, ped_filename):
             
             if individual_id in probands:
                 family = {}
+                family["family_id"] = fam_id
                 family["child"] = individual_id
                 family["mother"] = maternal_id
                 family["father"] = paternal_id
@@ -58,27 +59,11 @@ def open_families(probands_filename, ped_filename):
     
     return families
 
-def extract_bams(families, bams_dir):
-    """ make sure we have bam files available for all the members of the families
-    """
-    
-    log_dir = "bam_extraction_logs"
-    
-    if not os.path.exists(log_dir):
-        os.mkdir(log_dir)
-    
-    for family, sex in families:
-        for individual in family:
-            sample_id = family[individual]
-            bsub_preamble = ["bsub", "-q", "normal", "-o", os.path.join(log_dir, sample_id + ".bjob_output.txt")]
-            extract_command = ["python", BAM_EXTRACTOR, "--sample-id", sample_id, "--dir", bams_dir]
-            
-            subprocess.call(bsub_preamble + extract_command)
-
 def main():
     
     families = open_families(PROBANDS_FILE, FAMILIES_PED_FILE)
-    # extract_bams(families, TEMP_DIR)
+    # for family in families:
+    #     extract_bams(family, TEMP_DIR)
     
     temp = families[0]
     family = temp[0]
@@ -91,17 +76,18 @@ def main():
     child_bam = find_bam_path(child_id, TEMP_DIR)
     mother_bam = find_bam_path(mother_id, TEMP_DIR)
     father_bam = find_bam_path(father_id, TEMP_DIR)
+    outdir = os.path.dirname(child_bam)
     
-    # # call a single region
-    # caller = MosaicCalling(child_bam, mother_bam, father_bam, sex)
-    # chrom = "1"
-    # start = "1"
-    # stop = "50000"
-    # region = (chrom, start, stop)
-    # caller.call_mosaic_de_novos_in_region(region)
+    # # # call a single region
+    caller = MosaicCalling(child_bam, mother_bam, father_bam, sex, outdir)
+    chrom = "1"
+    start = "1"
+    stop = "50000"
+    region = (chrom, start, stop)
+    caller.call_mosaic_de_novos_in_region(region)
     
     # # submit jobs to the cluster to call de novos
-    call_mosaic_de_novos(child_bam, mother_bam, father_bam, sex)
+    # call_mosaic_de_novos(child_bam, mother_bam, father_bam, sex)
     
     # for family, sex in families:
         

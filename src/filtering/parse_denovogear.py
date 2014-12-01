@@ -121,6 +121,9 @@ class ParseDenovogear(object):
         
         return set(self.get_variants()) - set(other.get_variants())
     
+    def __iter__(self):
+        return iter(self.variants)
+    
     def get_subset(self, keys):
         """ gets a subset of variants given a list of keys
         

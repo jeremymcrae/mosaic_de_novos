@@ -7,7 +7,7 @@ Pysam can't use standard input as a python file-like interface, instead it
 somehow grabs the standard input internally.
 
 This requires standard input in order to use this in a long series of piped
-commands. The merged BAM output is written to standrd out.
+commands. The merged BAM output is written to standard out.
 
 Usage:
 
@@ -50,7 +50,7 @@ def get_bam_header(bam_path, sample_id):
         sample_id: sample ID to be added into the sample
     """
     
-    bam = pysam.Alignmentfile(bam_path)
+    bam = pysam.AlignmentFile(bam_path)
     
     for pos in range(len(bam.header["RG"])):
         bam.header["RG"][pos]["SM"] = sample_id
@@ -103,11 +103,11 @@ def fix_merged_bam(subsampled_path, alternate_path):
     # complete merged BAM as standard input, but pysam has difficultly with
     # standard input, so we can't specify it as sys.stdin, instead it needs to 
     # use the pysam syntax of reading a filename of "-".
-    input_bam = pysam.Alignmentfile("-", "rb")
+    input_bam = pysam.AlignmentFile("-", "rb")
     
     # open an output BAM, using the corrected header, and write the standard 
     # input merged BAM to that.
-    output_bam = pysam.Alignmentfile("-", "wb", header = merged_header)
+    output_bam = pysam.AlignmentFile("-", "wb", header = merged_header)
     
     for item in input_bam: 
         output_bam.write(item)

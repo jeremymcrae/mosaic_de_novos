@@ -4,6 +4,7 @@ samtools/denovogear output.
 
 from __future__ import print_function
 from __future__ import division
+from __future__ import absolute_import
 
 import argparse
 import sys
@@ -12,7 +13,7 @@ import pysam
 from scipy.stats import poisson
 import tabulate
 
-from src.filter.parse_denovogear import ParseDenovogear
+from src.filtering.parse_denovogear import ParseDenovogear
 
 IS_PYTHON2 = sys.version_info[0] == 2
 IS_PYTHON3 = sys.version_info[0] == 3
@@ -25,13 +26,13 @@ def get_options():
         "from calling mosaic SNVs.")
     parser.add_argument("--standard", help="denovogear output from standard samtools")
     parser.add_argument("--modified", help="denovogear output from modified samtools")
-    parser.add_argument("--proband-bam", help="bam file for the proband.")
-    parser.add_argument("--mom-bam", help="bam file for the mother.")
-    parser.add_argument("--dad-bam", help="bam file for the father.")
+    parser.add_argument("--proband-bam", required=True, help="bam file for the proband.")
+    parser.add_argument("--mother-bam", required=True, help="bam file for the mother.")
+    parser.add_argument("--father-bam", required=True, help="bam file for the father.")
     
     args = parser.parse_args()
     
-    return args.standard, args.modified, args.proband_bam, args.mom_bam, args.dad_bam
+    return args.standard, args.modified, args.proband_bam, args.mother_bam, args.father_bam
 
 def get_mosaic_only_de_novos(standard, modified):
     """ finds the variants that only occur in the mosaic analyses
@@ -84,7 +85,7 @@ def count_bases(bam, chrom, pos, max_coverage=1e10, min_qual=0):
                 break
             
             # convert the quality score to integer
-            qual = read.alignment.qual[read.query_position]
+            qual = read.alignment.query_qualities[read.query_position]
             if IS_PYTHON2: 
                 qual = ord(qual)
             
@@ -92,15 +93,18 @@ def count_bases(bam, chrom, pos, max_coverage=1e10, min_qual=0):
                 continue
             
             # get the base call as a string
-            base = read.alignment.seq[read.query_position]
-            
+            base = read.alignment.query_sequence[read.query_position]
             bases[base] += 1
     
     return bases
 
-def examine_variants(mosaic_only, child_bam, mom_bam, dad_bam):
+def examine_variants(mosaic, child_bam, mom_bam, dad_bam):
+    
     table = []
-    for (chrom, pos) in sorted(mosaic_only):
+    
+    variants = mosaic.get_variants()
+    
+    for (chrom, pos) in sorted(variants):
         # this follows the probability model set out in: 
         # Illumina Inc. Illumina Technical Note: Somatic Variant Caller. (2014). 
         # at <http://res.illumina.com/documents/products/technotes/technote_somatic_variant_caller.pdf>
@@ -115,19 +119,25 @@ def examine_variants(mosaic_only, child_bam, mom_bam, dad_bam):
         mu = (10 ** (-(abs(min_qual))/10)) * sum(bases.values())
         
         key = (chrom, pos)
-        ref_base = mosaic_only[key]["ref_base"]
-        alt_bases = set(mosaic_only[key]["ALT"].split(","))
-        alt_bases.remove("X")
+        ref_base = variants[key]["ref_base"]
+        alt_bases = set(variants[key]["ALT"].split(","))
         
-        pp_dnm = float(mosaic_only[key]["pp_dnm"])
-        dng_depth = mosaic_only[key]["READ_DEPTH"]["child"]
-        depth = sum(bases.values())
+        try:
+            alt_bases.remove("X")
+        except KeyError:
+            continue
+        
+        pp_dnm = float(variants[key]["pp_dnm"])
+        dng_depth = variants[key]["READ_DEPTH"]["child"]
+        child_depth = sum(bases.values())
         mom_depth = sum(mom_bases.values())
         dad_depth = sum(dad_bases.values())
         
+        print(child_depth, mom_depth, dad_depth)
+        
         # currently hard code some depth filters (maybe swap this to based on the 
         # global coverage)
-        if depth > 200 or depth < 20:
+        if child_depth > 200 or child_depth < 20:
             continue
         
         for alt_base in alt_bases:
@@ -136,8 +146,8 @@ def examine_variants(mosaic_only, child_bam, mom_bam, dad_bam):
             dad_prp = dad_bases[alt_base]/dad_depth
             
             de_novo_reads = alt_reads
-            if alt_reads > depth - alt_reads:
-                de_novo_reads = depth - alt_reads
+            if alt_reads > child_depth - alt_reads:
+                de_novo_reads = child_depth - alt_reads
                 mom_prp = 1 - mom_prp
                 dad_prp = 1 - dad_prp
             
@@ -148,14 +158,14 @@ def examine_variants(mosaic_only, child_bam, mom_bam, dad_bam):
             # exclude variants with allel frequencies too close to 0.5, since
             # these should have been screened by the standard de novo variant
             # calling pipeline
-            if abs(de_novo_reads/depth - 0.5) < 0.05:
+            if abs((de_novo_reads/child_depth )- 0.5) < 0.05:
                 continue
             
-            line = [chrom, pos, ref_base, alt_base, poisson_p, pp_dnm, mu, de_novo_reads, mom_prp, dad_prp, dng_depth, depth]
+            line = [chrom, pos, ref_base, alt_base, poisson_p, pp_dnm, mu, de_novo_reads, mom_prp, dad_prp, dng_depth, child_depth]
             table.append(line)
 
     header = ["chrom", "pos", "ref", "alt", "poisson_p", "pp_dnm", "mu", \
-        "de_novo_reads", "mom_prp", "dad_prp", "dng_depth", "depth"]
+        "de_novo_reads", "mom_prp", "dad_prp", "dng_depth", "child_depth"]
     
     print(tabulate.tabulate(table, headers = header))
 
@@ -167,14 +177,16 @@ def main():
     mom_bam = pysam.AlignmentFile(mom_bam_path)
     dad_bam = pysam.AlignmentFile(dad_bam_path)
 
-    mosaic = get_mosaic_only_de_novos(standard, modified)
+    # mosaic = get_mosaic_only_de_novos(standard, modified)
+    mosaic = ParseDenovogear(modified)
     
     examine_variants(mosaic, child_bam, mom_bam, dad_bam)
     
     sys.stdout.write("chrom\tpos\tpp_dnm\tchild_read_depth\tmom_read_depth\tdad_read_depth\tchild_qual\tmom_qual\tdad_qual\n")
     
-    for key in mosaic:
-        var = mosaic[key]
+    variants = mosaic.get_variants()
+    for key in variants:
+        var = variants[key]
         depth = var["READ_DEPTH"]
         qual = var["MAPPING_QUALITY"]
         out = "{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\n".format(var["ref_name"], var["coor"], var["pp_dnm"], depth["child"], depth["mom"], depth["dad"], qual["child"], qual["mom"], qual["dad"])
