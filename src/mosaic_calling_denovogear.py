@@ -86,9 +86,9 @@ class MosaicCalling(object):
         self.new_bam = self.child_bam[:-3] + "standard_samtools.bam"
         new_child_bam = symlink_bam(self.child_bam, self.new_bam)
         
-        if output_dir is None:
-            output_dir = os.path.dirname(self.child_bam)
         self.output_dir = output_dir
+        if self.output_dir is None:
+            self.output_dir = os.path.dirname(self.child_bam)
     
     def call_mosaic_de_novos_in_region(self, region):
         """ call the rest of the functions in this class, in the correct order, 
@@ -157,7 +157,7 @@ class MosaicCalling(object):
             bam: path to bam file
             region: tuple of (chrom, start, stop) strings
             samtools: Popen command from running samtools, contains samtools 
-                output in a pipe.
+                mpileup output in a pipe.
         
         Returns:
             handle to VCF file
@@ -179,22 +179,20 @@ class MosaicCalling(object):
             stdin=samtools.stdout, stdout=subprocess.PIPE)
         
         # compress and tabix the initial VCF output
-        bgzip = subprocess.call(["bgzip"], stdin=to_vcf.stdout, stdout=temp_vcf)
-        subprocess.call(["tabix", "-f", "-p", "vcf", temp_vcf.name])
+        subprocess.call(["bgzip"], stdin=to_vcf.stdout, stdout=temp_vcf)
         
         # fix the header of the initial VCF output
-        reheader = subprocess.call([self.new_bcftools, "reheader", "--header", \
-            header.name, temp_vcf.name], stdout=vcf)
+        subprocess.call([self.new_bcftools, "reheader", "--header", header.name, \
+            temp_vcf.name], stdout=vcf)
         subprocess.call(["tabix", "-f", "-p", "vcf", vcf.name])
         
         # and remove the temp files
         temp_vcf.close()
         header.close()
-        os.remove(temp_vcf.name + ".tbi")
         
         return vcf
     
-    def run_denovogear(self, child, mother, father, dnm, region):
+    def run_denovogear(self, child, mother, father, region, modify):
         """ we need to merge the VCFs and convert to BCF, then run denovogear
         
         Args:

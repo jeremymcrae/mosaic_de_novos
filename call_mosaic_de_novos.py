@@ -62,8 +62,12 @@ def open_families(probands_filename, ped_filename):
 def main():
     
     families = open_families(PROBANDS_FILE, FAMILIES_PED_FILE)
-    # for family in families:
-    #     extract_bams(family, TEMP_DIR)
+    # for family, sex in families:
+    #     child_id = family["child"]
+    #     mother_id = family["mother"]
+    #     father_id = family["father"]
+    #     for sample_id in [child_id, mother_id, father_id]:
+    #          extract_bams(sample_id, TEMP_DIR)
     
     temp = families[0]
     family = temp[0]
@@ -78,7 +82,7 @@ def main():
     father_bam = find_bam_path(father_id, TEMP_DIR)
     outdir = os.path.dirname(child_bam)
     
-    # # # call a single region
+    # # call a single region
     caller = MosaicCalling(child_bam, mother_bam, father_bam, sex, outdir)
     chrom = "1"
     start = "1"
@@ -87,19 +91,10 @@ def main():
     caller.call_mosaic_de_novos_in_region(region)
     
     # # submit jobs to the cluster to call de novos
-    # call_mosaic_de_novos(child_bam, mother_bam, father_bam, sex)
+    # call_mosaic_de_novos(family, sex)
     
     # for family, sex in families:
-        
-    #     child_id = family["child"]
-    #     mother_id = family["mother"]
-    #     father_id = family["father"]
-        
-    #     child_bam = find_bam_path(child_id, TEMP_DIR)
-    #     mother_bam = find_bam_path(mother_id, TEMP_DIR)
-    #     father_bam = find_bam_path(father_id, TEMP_DIR)
-        
-    #     call_mosaic_de_novos(child_bam, mother_bam, father_bam, sex)
+    #     call_mosaic_de_novos(family, sex)
     
 
 if __name__ == '__main__':

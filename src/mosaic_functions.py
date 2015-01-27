@@ -7,6 +7,8 @@ import pysam
 import sys
 import subprocess
 
+from extract bam import get_irods_path_for_participant, extract_bam_from_irods
+
 chrom_lengths = {"1": 248956422, "2": 242193529, "3": 198295559, 
     "4": 190214555, "5": 181538259, "6": 170805979, "7": 159345973, \
     "8": 145138636, "9": 138394717, "10": 133797422, "11": 135086622,  \
@@ -17,14 +19,32 @@ chrom_lengths = {"1": 248956422, "2": 242193529, "3": 198295559,
 TEMP_DIR = "/lustre/scratch113/projects/ddd/users/jm33/bams"
 BAM_EXTRACTOR = "/nfs/users/nfs_j/jm33/apps/VICAR/python/extract_bam.py"
 
-def call_mosaic_de_novos(child_bam, mother_bam, father_bam, sex):
+def call_mosaic_de_novos(family, sex):
     """ run through all of the chroms, region by region
     """
     
-    # extract_bams(family, TEMP_DIR)
+    bams = []
+    bam_ids = []
+    # make sure we have a bam dir
+    for member in ["child", "mother", "father"]:
+        sample_id = family[member]
+        bam_paths = get_irods_path_for_participant(sample_id)
+        if len(bam_paths["lustre"]) == 0:
+            bam = find_bam_path(child_id, TEMP_DIR)
+            job_id = extract_bams(sample_id, bam_path=bam)
+            bam_ids.append(bam_ids)
+        else:
+            bam = bam_paths["lustre"][0]
+        bams.append(bam)
+    
+    child_bam = bams[0]
+    mother_bam = bams[1]
+    father_bam = bams[2]
+    
+    # check if any of the bam extraction jobs are still running
     
     increment = 50000000
-    child_id = os.path.basename(os.path.splitext(child_bam)[0])
+    child_id = get_sample_id_from_bam(child_bam)
     
     job_ids = []
     for chrom in chrom_lengths:
@@ -47,8 +67,14 @@ def call_mosaic_de_novos(child_bam, mother_bam, father_bam, sex):
                 "--start", str(start), \
                 "--stop", str(end)]
             
-            submit_bsub_job(command, job_id, memory=500, requeue_code=99)
+            submit_bsub_job(command, job_id, dependent_id=bam_ids, memory=500, requeue_code=99)
             job_ids.append(job_id)
+    
+    merge_denovogear(child_bam, child_id, job_ids)
+
+def merge_denovogear(child_bam, child_id, job_ids):
+    """ merge all the denovogear output files, following denovogear calling
+    """
     
     # merge all the denovogear output for the standard samtools
     folder = os.path.dirname(os.path.splitext(child_bam)[0])
@@ -71,28 +97,33 @@ def call_mosaic_de_novos(child_bam, mother_bam, father_bam, sex):
     
     submit_bsub_job(command, job_id, dependent_id=job_ids)
 
-def extract_bams(family, bams_dir):
+def extract_bams(sample_id, bam_dir=None, bam_path=None):
     """ make sure we have bam files for all the family members
     
     Args:
         family: tuple of (family dict, sex)
-        bams_dir: folder to store the BAM file into
+        bam_dir: folder to store the BAM file into
+        bam_dir: path to store the BAM file at
     """
     
-    sex = family[1]
-    family = family[0]
+    # only allow one of bam_dir or bam_path to be used
+    assert (bam_dir is not None and bam_path is None) or (bam_dir is None and bam_path is not None)
     
     log_dir = "bam_extraction_logs"
-    
     if not os.path.exists(log_dir):
         os.mkdir(log_dir)
     
-    for individual in family:
-        sample_id = family[individual]
-        
-        command = ["python", BAM_EXTRACTOR, "--sample-id", sample_id, "--dir", bams_dir]
-        log = os.path.join(log_dir, sample_id + ".bjob_output.txt")
-        submit_bsub_job(command, logfile=log)
+    job_id = get_random_string()
+    
+    log = os.path.join(log_dir, sample_id + ".bjob_output.txt")
+    if bam_dir is not None:
+        command = ["python", BAM_EXTRACTOR, "--sample-id", sample_id, "--dir", bam_dir]
+    elif bam_path is not None:
+        command = ["python", BAM_EXTRACTOR, "--sample-id", sample_id, "--path", bam_path]
+    
+    submit_bsub_job(command, job_id, logfile=log)
+    
+    return job_id
 
 def make_corrected_vcf_header(bam_path, output=None):
     """ makes a header file that fixes the lack of explanatory lines
@@ -128,14 +159,15 @@ def make_corrected_vcf_header(bam_path, output=None):
     output.writelines(header)
     output.flush()
 
-def submit_bsub_job(command, job_id, dependent_id=None, memory=None, requeue_code=None, logfile=None):
+def submit_bsub_job(command, job_id=None, dependent_id=None, memory=None, requeue_code=None, logfile=None):
     """ construct a bsub job submission command
     
     Args:
         command: list of strings that forma unix command
         job_id: string for job ID for submission
         dependent_id: job ID, or list of job IDs which the current command needs
-            to have finished before the current command will start.
+            to have finished before the current command will start. Note that 
+            the list can be empty, in which case there are no dependencies.
         memory: minimum memory requirements (in megabytes)
     
     Returns:
