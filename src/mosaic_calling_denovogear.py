@@ -10,7 +10,7 @@ import logging
 import tempfile
 
 from mosaic_functions import get_sample_id_from_bam, make_corrected_vcf_header, \
-    make_ped_for_trio, symlink_bam, make_seq_dic_file
+    make_ped_for_trio, symlink_bam, make_seq_dic_file, chrom_lengths
 
 logging.basicConfig(filename='mosaic_calling.log',level=logging.DEBUG)
 
@@ -22,12 +22,13 @@ def get_options():
     parser.add_argument("--proband-bam", required=True, help="BAM file for proband")
     parser.add_argument("--mother-bam", required=True, help="BAM file for mother")
     parser.add_argument("--father-bam", required=True, help="BAM File for father")
-    parser.add_argument("--proband-sex", required=True, help="Gender of proband")
+    parser.add_argument("--proband-sex", required=True, \
+        choices=["1", "M", "male", "2", "F", "female"], help="Sex of proband")
     
     # and define the region of the genome to call
     parser.add_argument("--chrom", required=True, help="Chromosome to find denovos in")
-    parser.add_argument("--start", required=True, help="Region of chromosome to start examining for de novos")
-    parser.add_argument("--stop", required=True, help="Region of chromosome to stop examining for de novos")
+    parser.add_argument("--start", help="Region of chromosome to start examining for de novos, omit to process full chromosome")
+    parser.add_argument("--stop", help="Region of chromosome to stop examining for de novos, omit to process full chromosome")
     
     parser.add_argument("--outdir", help="Folder to place denovogear results into")
     
@@ -44,16 +45,22 @@ class MosaicCalling(object):
     
     hgi = "/software/hgi/pkglocal"
     
+    # define all the software tools
     denovogear = "/nfs/users/nfs_s/sa9/scripts/denovogear/denovogear-0.5/build/src/denovogear"
-    reference = "/software/ddd/resources/v1.2/hs37d5.fasta"
-    standard_samtools = os.path.join(hgi, "samtools-0.1.19", "bin", "samtools")
+    standard_samtools = "/software/vertres/bin-external/samtools-0.1.18"
     modified_samtools = "/nfs/team29/aw15/samtoolsMod/samtools"
     old_bcftools = "/software/vertres/bin-external/bcftools-0.1.18"
     new_bcftools = os.path.join(hgi, "bcftools-1.1", "bin", "bcftools") # version 1.0+ is necessary for the reheader command
     pl_fixer = os.path.join(os.path.dirname(__file__), "fix_pl_field.py")
     
-    female_codes = ["F", "Female", "female", "2"]
-    male_codes = ["M", "Male", "male", "1"]
+    # define the genome reference file (perhaps the DDD file isn't available to
+    # everyone, in which case swap to reference on my lustre folder).
+    reference = "/software/ddd/resources/v1.2/hs37d5.fasta"
+    if not os.path.exists(reference):
+        reference = "/lustre/scratch113/teams/hurles/users/jm33/hs37d5.fasta"
+        
+    female_codes = ["f", "female", "2"]
+    male_codes = ["m", "male", "1"]
     
     dic_path = "seq_dic.txt"
     make_seq_dic_file(dic_path)
@@ -91,7 +98,7 @@ class MosaicCalling(object):
             self.output_dir = os.path.dirname(self.child_bam)
     
     def call_mosaic_de_novos_in_region(self, region):
-        """ call the rest of the functions in this class, in the correct order, 
+        """ call the rest of the functions in this class, in the correct order,
         and on the correct files
         
         Args:
@@ -101,6 +108,13 @@ class MosaicCalling(object):
         Returns:
             nothing
         """
+        
+        # if we haven't specified a start and end for a chromosomal region, then
+        # assume we want to process the entire chromosome
+        if region[1] is None:
+            region = (region[0], 1, region[2])
+        if region[2] is None:
+            region = (region[0], region[1], chrom_lengths[region[0]])
         
         # run samtools, with the modified samtools used for the child
         child_vcf = self.samtools(self.child_bam, region, modified=True)
@@ -156,7 +170,7 @@ class MosaicCalling(object):
         Args:
             bam: path to bam file
             region: tuple of (chrom, start, stop) strings
-            samtools: Popen command from running samtools, contains samtools 
+            samtools: Popen command from running samtools, contains samtools
                 mpileup output in a pipe.
         
         Returns:
@@ -227,7 +241,7 @@ class MosaicCalling(object):
         
         # generate a BCF for denovogear
         bcf = subprocess.Popen([self.old_bcftools, "view", "-D", \
-            self.dic_path, "-Sb", "/dev/stdin"], stdin=pl_fix.stdout, 
+            self.dic_path, "-Sb", "/dev/stdin"], stdin=pl_fix.stdout,
             stdout=subprocess.PIPE)
         
         # and run de novogear on the output
@@ -239,10 +253,10 @@ class MosaicCalling(object):
     def remove_vcfs(self, vcfs):
         """ remove the temporary VCF files for the region
         
-        This relies on removing files with the correct VCF filename, generated 
-        during the convert_to_vcf() method. This function runs after bcf 
+        This relies on removing files with the correct VCF filename, generated
+        during the convert_to_vcf() method. This function runs after bcf
         conversion and denovogear analysis, since we construct two BCFs, which
-        means we have to call this after both have completed, rather than 
+        means we have to call this after both have completed, rather than
         cleaning the files up at the end of th function.
         
         Args:
@@ -266,4 +280,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
