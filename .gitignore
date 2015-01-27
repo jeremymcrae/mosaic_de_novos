@@ -1,2 +1,6 @@
 *.pyc
 */pycache/*
+data/
+*.log
+*logs/
+seq_dic.txt
