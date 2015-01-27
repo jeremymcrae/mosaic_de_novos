@@ -7,9 +7,9 @@ import pysam
 import sys
 import subprocess
 
-from extract bam import get_irods_path_for_participant, extract_bam_from_irods
+from extract_bam import get_irods_path_for_participant, extract_bam_from_irods
 
-chrom_lengths = {"1": 248956422, "2": 242193529, "3": 198295559, 
+chrom_lengths = {"1": 248956422, "2": 242193529, "3": 198295559,
     "4": 190214555, "5": 181538259, "6": 170805979, "7": 159345973, \
     "8": 145138636, "9": 138394717, "10": 133797422, "11": 135086622,  \
     "12": 133275309, "13": 114364328, "14": 107043718, "15": 101991189, \
@@ -166,7 +166,7 @@ def submit_bsub_job(command, job_id=None, dependent_id=None, memory=None, requeu
         command: list of strings that forma unix command
         job_id: string for job ID for submission
         dependent_id: job ID, or list of job IDs which the current command needs
-            to have finished before the current command will start. Note that 
+            to have finished before the current command will start. Note that
             the list can be empty, in which case there are no dependencies.
         memory: minimum memory requirements (in megabytes)
     
@@ -336,7 +336,7 @@ def is_number(string):
     return True
 
 def get_random_string():
-    """ make a random string, which we can use for bsub job IDs, so that 
+    """ make a random string, which we can use for bsub job IDs, so that
     different jobs do not have the same job IDs.
     """
     
@@ -344,8 +344,8 @@ def get_random_string():
     hash_string = "%8x" % random.getrandbits(32)
     hash_string = hash_string.strip()
     
-    # done't allow the random strings to be equivalent to a number, since 
-    # the LSF cluster interprets those differently from letter-containing 
+    # done't allow the random strings to be equivalent to a number, since
+    # the LSF cluster interprets those differently from letter-containing
     # strings
     while is_number(hash_string):
         hash_string = "%8x" % random.getrandbits(32)
