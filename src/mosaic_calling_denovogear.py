@@ -90,11 +90,6 @@ class MosaicCalling(object):
         self.mother_bam = mother_bam
         self.father_bam = father_bam
         
-        # make a new bam for the child for using with the standard samtools, so
-        # it has a different filename
-        self.new_bam = self.child_bam[:-3] + "standard_samtools.bam"
-        new_child_bam = symlink_bam(self.child_bam, self.new_bam)
-        
         self.output_dir = output_dir
         if self.output_dir is None:
             self.output_dir = os.path.dirname(self.child_bam)
@@ -122,7 +117,7 @@ class MosaicCalling(object):
         child_vcf = self.samtools(self.child_bam, region, modified=True)
         mother_vcf = self.samtools(self.mother_bam, region)
         father_vcf = self.samtools(self.father_bam, region)
-        new_child_vcf = self.samtools(self.new_bam, region)
+        new_child_vcf = self.samtools(self.child_bam, region)
         
         # prepare a BCF file for denovogear, then run denovogear on that
         self.run_denovogear(child_vcf, mother_vcf, father_vcf, region, "standard")
