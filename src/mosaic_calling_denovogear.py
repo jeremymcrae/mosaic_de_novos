@@ -24,20 +24,25 @@ def get_options():
     parser.add_argument("--father-bam", required=True, help="BAM File for father")
     parser.add_argument("--proband-sex", required=True, \
         choices=["1", "M", "male", "2", "F", "female"], help="Sex of proband")
+    parser.add_argument("--outdir", help="Folder to place denovogear results into")
     
     # and define the region of the genome to call
     parser.add_argument("--chrom", required=True, help="Chromosome to find denovos in")
     parser.add_argument("--start", help="Region of chromosome to start examining for de novos, omit to process full chromosome")
     parser.add_argument("--stop", help="Region of chromosome to stop examining for de novos, omit to process full chromosome")
     
-    parser.add_argument("--outdir", help="Folder to place denovogear results into")
+    parser.add_argument("--proportion", type=float, default=0.25, \
+        help="Expected proportion of somatic mosaicism")
     
     args = parser.parse_args()
     
     region = (args.chrom, args.start, args.stop)
     
+    if args.proportion > 1 or args.proportion < 0:
+        sys.exit("error: argument --proportion: the expected proportion of somatic mosaicism must be between 0 and 1.")
+    
     return args.proband_bam, args.mother_bam, args.father_bam, \
-        args.proband_sex, region, args.outdir
+        args.proband_sex, region, args.outdir, args.proportion
 
 class MosaicCalling(object):
     """ class to construct and run the mosaic de novo calling commands for a trio
@@ -62,10 +67,10 @@ class MosaicCalling(object):
     female_codes = ["f", "female", "2"]
     male_codes = ["m", "male", "1"]
     
-    dic_path = "seq_dic.txt"
+    dic_path = tempfile.NamedTemporaryFile(mode="w")
     make_seq_dic_file(dic_path)
          
-    def __init__(self, child_bam, mother_bam, father_bam, sex, output_dir=None):
+    def __init__(self, child_bam, mother_bam, father_bam, sex, output_dir=None, proportion=0.25):
         """ initiates the class with the BAM paths etc
         
         Args:
@@ -80,10 +85,8 @@ class MosaicCalling(object):
         assert self.proband_sex in self.male_codes + self.female_codes
         
         # make sure there is a ped file available for the trio
-        # self.ped_path = os.path.join(os.path.dirname(child_bam), "family.ped")
-        # self.ped = tempfile.NamedTemporaryFile(mode="w", suffix=".ped")
-        self.ped_path = "family.ped"
-        make_ped_for_trio(child_bam, mother_bam, father_bam, sex, self.ped_path)
+        self.ped = tempfile.NamedTemporaryFile(mode="w")
+        make_ped_for_trio(child_bam, mother_bam, father_bam, sex, self.ped)
         
         # find the sample BAMs
         self.child_bam = child_bam
@@ -93,6 +96,9 @@ class MosaicCalling(object):
         self.output_dir = output_dir
         if self.output_dir is None:
             self.output_dir = os.path.dirname(self.child_bam)
+        
+        self.proportion = proportion
+        assert 0 <= self.proportion <= 1
     
     def call_mosaic_de_novos_in_region(self, region):
         """ call the rest of the functions in this class, in the correct order,
@@ -114,10 +120,10 @@ class MosaicCalling(object):
             region = (region[0], region[1], chrom_lengths[region[0]])
         
         # run samtools, with the modified samtools used for the child
-        child_vcf = self.samtools(self.child_bam, region, modified=True)
+        child_vcf = self.samtools(self.child_bam, region)
         mother_vcf = self.samtools(self.mother_bam, region)
         father_vcf = self.samtools(self.father_bam, region)
-        new_child_vcf = self.samtools(self.child_bam, region)
+        new_child_vcf = self.samtools(self.child_bam, region, modified=True)
         
         # prepare a BCF file for denovogear, then run denovogear on that
         self.run_denovogear(child_vcf, mother_vcf, father_vcf, region, "standard")
@@ -154,7 +160,7 @@ class MosaicCalling(object):
             self.reference, bam]
         if modified:
             sam_cmd[0] = self.modified_samtools
-            sam_cmd.append("-p0.25")
+            sam_cmd.append("-p{0}".format(self.proportion))
         
         samtools = subprocess.Popen(sam_cmd, stdout=subprocess.PIPE, \
             stderr=open(os.devnull, "w"))
@@ -238,13 +244,13 @@ class MosaicCalling(object):
         
         # generate a BCF for denovogear
         bcf = subprocess.Popen([self.old_bcftools, "view", "-D", \
-            self.dic_path, "-Sb", "/dev/stdin"], stdin=pl_fix.stdout,
+            self.dic_path.name, "-Sb", "/dev/stdin"], stdin=pl_fix.stdout,
             stdout=subprocess.PIPE)
         
         # and run de novogear on the output
         dnm = os.path.join(self.output_dir, "{0}.denovogear.{1}.{2}.dnm".format(child_id, region_path, modify))
         subprocess.call([self.denovogear, "dnm", dng_chr_type, "--ped", \
-            self.ped_path, "--bcf", "/dev/stdin"], stdin=bcf.stdout,  \
+            self.ped.name, "--bcf", "/dev/stdin"], stdin=bcf.stdout,  \
             stdout=open(dnm, "w"), stderr=open(os.devnull, "w"))
     
     def remove_vcfs(self, vcfs):
@@ -268,9 +274,9 @@ def main():
     """ runs mosaic calling for a single region of the genome in a single trio
     """
     
-    proband_bam, mother_bam, father_bam, proband_sex, region, outdir = get_options()
+    proband_bam, mother_bam, father_bam, proband_sex, region, outdir, proportion = get_options()
     
-    caller = MosaicCalling(proband_bam, mother_bam, father_bam, proband_sex, outdir)
+    caller = MosaicCalling(proband_bam, mother_bam, father_bam, proband_sex, outdir, proportion)
     
     caller.call_mosaic_de_novos_in_region(region)
     

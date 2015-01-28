@@ -227,27 +227,30 @@ def symlink_bam(current_path, new_path):
     os.symlink(current_path, new_path)
     os.symlink(current_path + ".bai", new_path + ".bai")
 
-def make_seq_dic_file(dic_path):
+def make_seq_dic_file(seq_dic):
     """ make sure we have a contig dictionary file available for bcftools
     
     Args:
-        dic_path: path to the sequence dictionary file
+        seq_dic: path to the sequence dictionary file, or a file handle.
         
     Returns:
         nothing
     """
     
-    # don't remake the sequence dictionary if the file already exists
-    if os.path.exists(dic_path):
-        return
-    
     chroms = list(range(1, 22)) + ["X", "Y"]
     chroms = [str(x) for x in chroms]
     chroms = "\n".join(chroms) + "\n"
     
-    seq_dic = open(dic_path, "w")
-    seq_dic.write(chroms)
-    seq_dic.close()
+    if isinstance(seq_dic, str):
+        # only create the file if it doesn't already exist
+        if os.path.exists(seq_dic):
+            return
+        
+        with open(seq_dic, "w") as output:
+            output.writelines(chroms)
+    else:
+        seq_dic.writelines(chroms)
+        seq_dic.flush()
 
 def find_bam_path(sample_id, bam_dir):
     """ find the path to the extracted BAM file
@@ -272,7 +275,7 @@ def make_ped_for_trio(child, mother, father, sex, ped):
         child: path to a bam file for the child.
         mother: path to a bam file for the mother.
         father: path to a bam file for the father.
-        ped: path to write the PED file to, or file handle.
+        ped: path to write the PED file to, or a file handle.
     
     Returns:
         nothing
@@ -296,11 +299,12 @@ def make_ped_for_trio(child, mother, father, sex, ped):
         # only create the file if it doesn't already exist
         if os.path.exists(ped):
             return
-        output = open(ped, "w")
+        
+        with open(ped, "w") as output:
+            output.writelines(lines)
     else:
-        output = ped
-    output.writelines(lines)
-    output.close()
+        ped.writelines(lines)
+        ped.flush()
 
 def get_sample_id_from_bam(bam_path):
     """ extracts a sample ID from a BAM file
