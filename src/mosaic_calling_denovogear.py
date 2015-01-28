@@ -76,11 +76,13 @@ class MosaicCalling(object):
             output_dir: folder to place the output in, or None
         """
         
-        self.proband_sex = sex
+        self.proband_sex = sex.lower()
         assert self.proband_sex in self.male_codes + self.female_codes
         
         # make sure there is a ped file available for the trio
-        self.ped_path = os.path.join(os.path.dirname(child_bam), "family.ped")
+        # self.ped_path = os.path.join(os.path.dirname(child_bam), "family.ped")
+        # self.ped = tempfile.NamedTemporaryFile(mode="w", suffix=".ped")
+        self.ped_path = "family.ped"
         make_ped_for_trio(child_bam, mother_bam, father_bam, sex, self.ped_path)
         
         # find the sample BAMs

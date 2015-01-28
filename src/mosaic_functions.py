@@ -265,22 +265,18 @@ def find_bam_path(sample_id, bam_dir):
     
     return sample_bam
 
-def make_ped_for_trio(child, mother, father, sex, ped_path):
+def make_ped_for_trio(child, mother, father, sex, ped):
     """ make a PED file to define the relationship of samples in a BCF file
     
     Args:
         child: path to a bam file for the child.
         mother: path to a bam file for the mother.
         father: path to a bam file for the father.
-        ped_path: path to write the PED file to.
+        ped: path to write the PED file to, or file handle.
     
     Returns:
         nothing
     """
-    
-    # only create the file if it doesn't already exist
-    if os.path.exists(ped_path):
-        return
     
     # get the alternative IDs that will exist in the VCF file
     child_id = get_sample_id_from_bam(child)
@@ -296,7 +292,13 @@ def make_ped_for_trio(child, mother, father, sex, ped_path):
     mother_line = "\t".join([fam_id, mother_id, "0", "0", "1", "2"]) + "\n"
     lines = [child_line, father_line, mother_line]
     
-    output = open(ped_path, "w")
+    if isinstance(ped, str):
+        # only create the file if it doesn't already exist
+        if os.path.exists(ped):
+            return
+        output = open(ped, "w")
+    else:
+        output = ped
     output.writelines(lines)
     output.close()
 
