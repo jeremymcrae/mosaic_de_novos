@@ -78,6 +78,11 @@ class ParseDenovogear(object):
         # these for later analysis
         variant["line"] = line
         
+        # a very few lines have the ID as "id", not "ID". Standardise this field
+        if "id" in variant:
+            variant["ID"] = variant["id"]
+            del variant["id"]
+        
         return variant
     
     def _parse_read_depth(self, split_line, index, variant):
