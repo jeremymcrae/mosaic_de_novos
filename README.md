@@ -40,7 +40,7 @@ pip install --user pysam
 You can merge the denovogear output from different chromosomes with:
 ```sh
 python src/filtering/merge_denovogear.py \
-  --remove-files # removes the intermediate denovogear outputs
+  --remove-files \ # removes the intermediate denovogear outputs
   --folder DIR_FOR_DENOVOGEAR_RESULTS \
   --pattern PATTERN # text used to select denovogear files to read from, must be contained within the full path, eg "modified.dnm" or "standard.dnm"
 ```
@@ -48,7 +48,6 @@ python src/filtering/merge_denovogear.py \
 #### Reformatting
 You can reformat the denovogear output into tabular format with:
 ```sh
-cd ..
 python filter_mosaic_denovogear.py \
 --standard STANDARD_DENOVOGEAR_OUTPUT_PATH \
 --modified MODIFIED_DENOVOGEAR_OUTPUT_PATH \

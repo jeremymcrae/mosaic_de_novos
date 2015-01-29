@@ -86,8 +86,6 @@ def count_bases(bam, chrom, pos, max_coverage=1e10, min_qual=0):
             
             # convert the quality score to integer
             qual = read.alignment.query_qualities[read.query_position]
-            if IS_PYTHON2:
-                qual = ord(qual)
             
             if qual < min_qual: # ignore low qual reads
                 continue
@@ -101,6 +99,7 @@ def count_bases(bam, chrom, pos, max_coverage=1e10, min_qual=0):
 def examine_variants(mosaic, child_bam, mom_bam, dad_bam):
     
     table = []
+    sex_chroms = {23: "X", 24: "Y"}
     
     variants = mosaic.get_variants()
     
@@ -109,10 +108,15 @@ def examine_variants(mosaic, child_bam, mom_bam, dad_bam):
         # Illumina Inc. Illumina Technical Note: Somatic Variant Caller. (2014).
         # at <http://res.illumina.com/documents/products/technotes/technote_somatic_variant_caller.pdf>
         
+        if chrom not in sex_chroms:
+            chrom_str = str(chrom)
+        else:
+            chrom_str = sex_chroms[chrom]
+        
         min_qual = 20
-        bases = count_bases(child_bam, chrom, int(pos), max_coverage=1000, min_qual=min_qual)
-        mom_bases = count_bases(mom_bam, chrom, int(pos), max_coverage=1000, min_qual=min_qual)
-        dad_bases = count_bases(dad_bam, chrom, int(pos), max_coverage=1000, min_qual=min_qual)
+        bases = count_bases(child_bam, chrom_str, int(pos), max_coverage=1000, min_qual=min_qual)
+        mom_bases = count_bases(mom_bam, chrom_str, int(pos), max_coverage=1000, min_qual=min_qual)
+        dad_bases = count_bases(dad_bam, chrom_str, int(pos), max_coverage=1000, min_qual=min_qual)
         
         # the lambda for the poisson distribution is the proportion of off target
         # bases that we expect, given the read depth and the min_qual
@@ -132,8 +136,6 @@ def examine_variants(mosaic, child_bam, mom_bam, dad_bam):
         child_depth = sum(bases.values())
         mom_depth = sum(mom_bases.values())
         dad_depth = sum(dad_bases.values())
-        
-        print(child_depth, mom_depth, dad_depth)
         
         # currently hard code some depth filters (maybe swap this to based on the
         # global coverage)
