@@ -82,11 +82,16 @@ def main():
     father_bam = find_bam_path(father_id, TEMP_DIR)
     outdir = os.path.dirname(child_bam)
     
+    
     # # call a single region
     caller = MosaicCalling(child_bam, mother_bam, father_bam, sex, outdir)
     chrom = "1"
     start = "1"
     stop = "50000"
+    
+    a = "python mosaic_calling_denovogear.py --proband-bam {0} --mother-bam {1} --father-bam {2} --proband-sex {3} --outdir {4} --chrom {5} --start {6} --stop {7}".format(child_bam, mother_bam, father_bam, sex, outdir, chrom, start, stop)
+    print(a)
+    
     region = (chrom, start, stop)
     caller.call_mosaic_de_novos_in_region(region)
     

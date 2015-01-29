@@ -23,7 +23,7 @@ def get_options():
     parser.add_argument("--mother-bam", required=True, help="BAM file for mother")
     parser.add_argument("--father-bam", required=True, help="BAM File for father")
     parser.add_argument("--proband-sex", required=True, \
-        choices=["1", "M", "male", "2", "F", "female"], help="Sex of proband")
+        choices=["1", "M", "m", "Male", "male", "2", "F", "f", "Female", "female"], help="Sex of proband")
     parser.add_argument("--outdir", help="Folder to place denovogear results into")
     
     # and define the region of the genome to call
@@ -67,8 +67,8 @@ class MosaicCalling(object):
     female_codes = ["f", "female", "2"]
     male_codes = ["m", "male", "1"]
     
-    dic_path = tempfile.NamedTemporaryFile(mode="w")
-    make_seq_dic_file(dic_path)
+    seq_dic = tempfile.NamedTemporaryFile(mode="w")
+    make_seq_dic_file(seq_dic)
          
     def __init__(self, child_bam, mother_bam, father_bam, sex, output_dir=None, proportion=0.25):
         """ initiates the class with the BAM paths etc
@@ -79,6 +79,7 @@ class MosaicCalling(object):
             father_bam: path to father's BAM file.
             sex: sex of the proband
             output_dir: folder to place the output in, or None
+            proportion: expected proportion of somatic mosaic variation.
         """
         
         self.proband_sex = sex.lower()
@@ -92,6 +93,10 @@ class MosaicCalling(object):
         self.child_bam = child_bam
         self.mother_bam = mother_bam
         self.father_bam = father_bam
+        
+        # catch the temporary vcfs, so that we can delete them later (even if
+        # the script crashes or is exited)
+        self.temp_vcfs = []
         
         self.output_dir = output_dir
         if self.output_dir is None:
@@ -107,9 +112,6 @@ class MosaicCalling(object):
         Args:
             region: tuple of (chrom, start nucleotide, stop nucleotide) strings
                 that define the region of the genome to examine for mosaic de novos
-        
-        Returns:
-            nothing
         """
         
         # if we haven't specified a start and end for a chromosomal region, then
@@ -119,18 +121,21 @@ class MosaicCalling(object):
         if region[2] is None:
             region = (region[0], region[1], chrom_lengths[region[0]])
         
-        # run samtools, with the modified samtools used for the child
-        child_vcf = self.samtools(self.child_bam, region)
-        mother_vcf = self.samtools(self.mother_bam, region)
-        father_vcf = self.samtools(self.father_bam, region)
-        new_child_vcf = self.samtools(self.child_bam, region, modified=True)
-        
-        # prepare a BCF file for denovogear, then run denovogear on that
-        self.run_denovogear(child_vcf, mother_vcf, father_vcf, region, "standard")
-        self.run_denovogear(new_child_vcf, mother_vcf, father_vcf, region, "modified")
-        
-        # and tidy up the VCFs that were produced
-        self.remove_vcfs([child_vcf, mother_vcf, father_vcf, new_child_vcf])
+        try:
+            # run samtools, with the modified samtools used for the child
+            child_vcf = self.samtools(self.child_bam, region)
+            mother_vcf = self.samtools(self.mother_bam, region)
+            father_vcf = self.samtools(self.father_bam, region)
+            new_child_vcf = self.samtools(self.child_bam, region, modified=True)
+            
+            # prepare a BCF file for denovogear, then run denovogear on that
+            self.run_denovogear(child_vcf, mother_vcf, father_vcf, region, "standard")
+            self.run_denovogear(new_child_vcf, mother_vcf, father_vcf, region, "modified")
+        finally:
+            # ensure we remove the temporary files that were produced
+            self.ped.close()
+            self.seq_dic.close()
+            self.remove_vcfs()
     
     def samtools(self, bam, region, modified=False):
         """ call genotypes from a BAM file using samtools
@@ -141,7 +146,7 @@ class MosaicCalling(object):
             modified: True/False for whether to use the modified samtools
         
         Returns:
-            nothing
+            file handle for temporary VCF file
         """
         
         region_id = "{0}:{1}-{2}".format(*region)
@@ -187,6 +192,8 @@ class MosaicCalling(object):
         
         # set the path to the output VCF
         vcf = tempfile.NamedTemporaryFile(mode="w", suffix=".vcf.gz")
+        self.temp_vcfs.append(vcf)
+        
         temp_vcf = tempfile.NamedTemporaryFile(mode="w", suffix=".vcf.gz")
         header = tempfile.NamedTemporaryFile(mode="w")
         make_corrected_vcf_header(bam, header)
@@ -216,11 +223,9 @@ class MosaicCalling(object):
             child: handle for proband's VCF file.
             mother: handle for mother's VCF file.
             father: handle for father's VCF file.
-            dnm: path to output denovogear data to.
-            region: tuple of (chrom, start, stop) strings
-        
-        Returns:
-            nothing
+            region: tuple of (chrom, start, stop) strings.
+            modify: either "modified" or "standard" to indicate which samtools
+                was used for the proband.
         """
         
         child_id = get_sample_id_from_bam(self.child_bam)
@@ -244,7 +249,7 @@ class MosaicCalling(object):
         
         # generate a BCF for denovogear
         bcf = subprocess.Popen([self.old_bcftools, "view", "-D", \
-            self.dic_path.name, "-Sb", "/dev/stdin"], stdin=pl_fix.stdout,
+            self.seq_dic.name, "-Sb", "/dev/stdin"], stdin=pl_fix.stdout,
             stdout=subprocess.PIPE)
         
         # and run de novogear on the output
@@ -253,22 +258,23 @@ class MosaicCalling(object):
             self.ped.name, "--bcf", "/dev/stdin"], stdin=bcf.stdout,  \
             stdout=open(dnm, "w"), stderr=open(os.devnull, "w"))
     
-    def remove_vcfs(self, vcfs):
+    def remove_vcfs(self):
         """ remove the temporary VCF files for the region
         
         This relies on removing files with the correct VCF filename, generated
         during the convert_to_vcf() method. This function runs after bcf
         conversion and denovogear analysis, since we construct two BCFs, which
         means we have to call this after both have completed, rather than
-        cleaning the files up at the end of th function.
+        cleaning the files up at the end of the function.
         
-        Args:
-            vcfs: list of file handles for vcf files
+        We can get away with merely closing the vcfs, since they are
+        NamedTemporaryFiles, and will be deleted upon closing.
         """
         
-        for vcf in vcfs:
+        for vcf in self.temp_vcfs:
             vcf.close()
-            os.remove(vcf.name + ".tbi")
+            if os.path.exists(vcf.name + ".tbi"):
+                os.remove(vcf.name + ".tbi")
 
 def main():
     """ runs mosaic calling for a single region of the genome in a single trio
@@ -278,7 +284,10 @@ def main():
     
     caller = MosaicCalling(proband_bam, mother_bam, father_bam, proband_sex, outdir, proportion)
     
-    caller.call_mosaic_de_novos_in_region(region)
+    try:
+        caller.call_mosaic_de_novos_in_region(region)
+    except KeyboardInterrupt:
+        sys.exit(1)
     
 
 if __name__ == '__main__':

@@ -34,6 +34,7 @@ def get_header(f):
         else:
             break
     
+    # get the first variant line, unless the VCF is header only.
     try:
         first_line = line
     except:
@@ -77,20 +78,20 @@ def process_vcf_line(line):
     sys.stdout.write(line)
 
 def fix_merged_vcf(merged):
-    """ Fix the VCF PL fields. This step is necessary because when you 
+    """ Fix the VCF PL fields. This step is necessary because when you
     merged the three VCFs, in some cases there may not be enough information
     to determine genotype likelihoods for genotypes involving an alternative
-    allele in all three samples. In such a case Vcftools' merge function 
-    substitutes the genotype likelihood in the resulting VCF's PL field 
+    allele in all three samples. In such a case Vcftools' merge function
+    substitutes the genotype likelihood in the resulting VCF's PL field
     with a dot ("."). This is not something DNG can work with, and therefore
-    the dots have to be substituted with extremely low phred-scaled genotype 
-    likelihoods such as 255. This is what the plFix.pl script does. Please 
-    note that this script is quite crude and you should probably understand 
+    the dots have to be substituted with extremely low phred-scaled genotype
+    likelihoods such as 255. This is what the plFix.pl script does. Please
+    note that this script is quite crude and you should probably understand
     what it does before using it for something important.
     """
     
     # sometimes we just pass in the standard input, rather than a filename. The
-    # standard input comes as an opened file-like interface, but given a 
+    # standard input comes as an opened file-like interface, but given a
     # filename, the filename needs to be opened.
     if not isinstance(merged, file):
         f = open(merged, "r")
