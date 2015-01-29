@@ -1,14 +1,14 @@
 """ functions to extract BAM files for participants from IRODS.
 
 Uses a DDD database tool (adb) to find the IRODS location, and uses an IRODS
-tool (iget) to extract the BAM and corresponding BAI file. Requires 
-authentication via kinit each time this is run, which is made easier by piping 
+tool (iget) to extract the BAM and corresponding BAI file. Requires
+authentication via kinit each time this is run, which is made easier by piping
 the password from a file (stored as read only for the user) to kinit.
 
 This script can be called as:
     python extract_bam.py --sample-id DDD_SAMPLE_ID --dir DIR_NAME
 
-or used in other scripts with: 
+or used in other scripts with:
 from extract_bam import get_irods_path_for_participant, extract_bam_from_irods
 
 """
@@ -27,7 +27,7 @@ def get_options():
     parser = argparse.ArgumentParser(description="Extract BAM file for a DDD individual.")
     parser.add_argument("--sample-id", required=True, help="individual ID")
     
-    group = argparse.add_mutually_exclusive_group(required=True)
+    group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--dir", help="location to extract bam files to")
     group.add_argument("--path", help="location to extract bam files to")
     
@@ -41,7 +41,7 @@ def get_irods_path_for_participant(sample_id):
     Args:
         sample_id: DDD participant ID (eg DDDP100137).
     
-    Returns:   
+    Returns:
         path to the BAM file in IRODs
     """
     
@@ -99,6 +99,9 @@ def main():
     """
     
     sample_id, output_dir, output_path = get_options()
+    
+    bam_paths = get_irods_path_for_participant(sample_id)
+    print(bam_paths)
     
     if output_dir is not None:
         output_dir = os.path.join(output_dir, sample_id)

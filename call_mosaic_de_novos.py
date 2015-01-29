@@ -89,14 +89,14 @@ def main():
     start = "1"
     stop = "50000"
     
-    a = "python mosaic_calling_denovogear.py --proband-bam {0} --mother-bam {1} --father-bam {2} --proband-sex {3} --outdir {4} --chrom {5} --start {6} --stop {7}".format(child_bam, mother_bam, father_bam, sex, outdir, chrom, start, stop)
-    print(a)
-    
-    region = (chrom, start, stop)
-    caller.call_mosaic_de_novos_in_region(region)
-    
+    # a = "python mosaic_calling_denovogear.py --proband-bam {0} --mother-bam {1} --father-bam {2} --proband-sex {3} --outdir {4} --chrom {5} --start {6} --stop {7}".format(child_bam, mother_bam, father_bam, sex, outdir, chrom, start, stop)
+    # print(a)
+    #
+    # region = (chrom, start, stop)
+    # caller.call_mosaic_de_novos_in_region(region)
+    #
     # # submit jobs to the cluster to call de novos
-    # call_mosaic_de_novos(family, sex)
+    call_mosaic_de_novos(family, sex)
     
     # for family, sex in families:
     #     call_mosaic_de_novos(family, sex)

@@ -26,8 +26,26 @@ class ParseDenovogear(object):
             for line in f:
                 if line.startswith("DENOVO"):
                     var = self._parse_line(line)
-                    key = (var["ref_name"], var["coor"])
+                    chrom = self._convert_chrom_to_numeric(var["ref_name"])
+                    key = (chrom, int(var["coor"]))
                     self.variants[key] = var
+    
+    def _convert_chrom_to_numeric(self, chrom):
+        """ converts a chromosome string to equivalent integer, for easy sorting
+        
+        Args:
+            chrom: string of the chromosome ("ref_name" in denovogear output)
+        """
+        
+        sex_chroms = {"X": 23, "Y": 24}
+        
+        try:
+            chrom = int(chrom)
+        except ValueError:
+            if chrom in sex_chroms:
+                chrom = sex_chroms[chrom]
+        
+        return chrom
     
     def _parse_line(self, line):
         """ parses a denovogear variant output line
@@ -52,18 +70,18 @@ class ParseDenovogear(object):
             key = fields[i].strip(":")
             variant[key] = fields[i + 1]
         
-        # and parse the 
+        # and parse the
         variant = self._parse_read_depth(fields, read_idx, variant)
         variant = self._parse_qual(fields, read_idx, variant)
         
-        # might as well hang on to the original line, if we want to simply dump 
+        # might as well hang on to the original line, if we want to simply dump
         # these for later analysis
         variant["line"] = line
         
         return variant
     
     def _parse_read_depth(self, split_line, index, variant):
-        """ grab the person-specific read depth fields, 
+        """ grab the person-specific read depth fields,
         
         The read depth fields are unfortunately named the same as for the qual
         fields, so we need to read the line, starting from an index position.
@@ -85,7 +103,7 @@ class ParseDenovogear(object):
         return variant
         
     def _parse_qual(self, split_line, index, variant):
-        """ grab the person-specific mapping quality fields, 
+        """ grab the person-specific mapping quality fields,
         
         The qual fields are unfortunately named the same as for the read depth
         fields, so we need to read the line, starting from an index position.
@@ -143,5 +161,3 @@ class ParseDenovogear(object):
                 subset[key] = variants[key]
         
         return subset
-
-

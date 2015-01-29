@@ -23,52 +23,47 @@ def call_mosaic_de_novos(family, sex):
     """ run through all of the chroms, region by region
     """
     
-    bams = []
-    bam_ids = []
-    # make sure we have a bam dir
-    for member in ["child", "mother", "father"]:
-        sample_id = family[member]
-        bam_paths = get_irods_path_for_participant(sample_id)
-        if len(bam_paths["lustre"]) == 0:
-            bam = find_bam_path(child_id, TEMP_DIR)
-            job_id = extract_bams(sample_id, bam_path=bam)
-            bam_ids.append(bam_ids)
-        else:
-            bam = bam_paths["lustre"][0]
-        bams.append(bam)
+    # bams = []
+    # bam_ids = []
+    # # make sure we have a bam dir
+    # for member in ["child", "mother", "father"]:
+    #     sample_id = family[member]
+    #     bam_paths = get_irods_path_for_participant(sample_id)
+    #     if len(bam_paths["lustre"]) == 0:
+    #         bam = find_bam_path(child_id, TEMP_DIR)
+    #         job_id = extract_bams(sample_id, bam_path=bam)
+    #         bam_ids.append(bam_ids)
+    #     else:
+    #         bam = bam_paths["lustre"][0]
+    #     bams.append(bam)
     
-    child_bam = bams[0]
-    mother_bam = bams[1]
-    father_bam = bams[2]
+    child_bam = find_bam_path(family["child"], TEMP_DIR)
+    mother_bam = find_bam_path(family["mother"], TEMP_DIR)
+    father_bam = find_bam_path(family["father"], TEMP_DIR)
     
     # check if any of the bam extraction jobs are still running
     
-    increment = 50000000
     child_id = get_sample_id_from_bam(child_bam)
     
     job_ids = []
     for chrom in chrom_lengths:
-        max_length = chrom_lengths[chrom]
         start = 1
-        end = 1
+        end = chrom_lengths[chrom]
         
-        while end <= max_length:
-            start = end
-            end = end + increment
-            
-            job_id = "{0}:{1}-{2}".format(chrom, start, end) + get_random_string()
-            
-            command = ["python3", "src/mosaic_calling_denovogear.py", \
-                "--proband-bam", child_bam, \
-                "--mother-bam", mother_bam, \
-                "--father-bam", father_bam, \
-                "--proband-sex", sex, \
-                "--chrom", chrom, \
-                "--start", str(start), \
-                "--stop", str(end)]
-            
-            submit_bsub_job(command, job_id, dependent_id=bam_ids, memory=500, requeue_code=99)
-            job_ids.append(job_id)
+        job_id = "{0}:{1}-{2}".format(chrom, start, end) + get_random_string()
+        
+        command = ["python3", "src/mosaic_calling_denovogear.py", \
+            "--proband-bam", child_bam, \
+            "--mother-bam", mother_bam, \
+            "--father-bam", father_bam, \
+            "--proband-sex", sex, \
+            "--chrom", chrom,
+            "--start", str(start), \
+            "--stop", str(end)]
+        
+        # submit_bsub_job(command, job_id, dependent_id=bam_ids, memory=500, requeue_code=99)
+        submit_bsub_job(command, job_id, memory=500, requeue_code=99)
+        job_ids.append(job_id)
     
     merge_denovogear(child_bam, child_id, job_ids)
 
@@ -82,7 +77,7 @@ def merge_denovogear(child_bam, child_id, job_ids):
     command = ["python3", "src/filtering/merge_denovogear.py", \
         "--folder", folder, \
         "--remove-files", \
-        "--pattern", "standard", \
+        "--pattern", "standard.dnm", \
         ">", os.path.join(folder, "{0}.denovogear.standard.dnm".format(child_id))]
     
     submit_bsub_job(command, job_id, dependent_id=job_ids)
@@ -92,7 +87,7 @@ def merge_denovogear(child_bam, child_id, job_ids):
     command = ["python3", "src/filtering/merge_denovogear.py", \
         "--folder", folder, \
         "--remove-files", \
-        "--pattern", "modified", \
+        "--pattern", "modified.dnm", \
         ">", os.path.join(folder, "{0}.denovogear.modified.dnm".format(child_id))]
     
     submit_bsub_job(command, job_id, dependent_id=job_ids)

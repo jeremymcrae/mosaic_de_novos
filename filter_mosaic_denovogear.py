@@ -1,4 +1,4 @@
-""" basic filtering of mosaic de novos using overlap with the standard 
+""" basic filtering of mosaic de novos using overlap with the standard
 samtools/denovogear output.
 """
 
@@ -50,7 +50,7 @@ def count_bases(bam, chrom, pos, max_coverage=1e10, min_qual=0):
     
     Args:
         bam: pysam bam object
-        chrom: chromosome to use eg "chr1" or "1" depending on how the BAM is 
+        chrom: chromosome to use eg "chr1" or "1" depending on how the BAM is
             set up (specifically, an ID found in the BAMs sequence dictionary).
         pos: base position to count bases at.
         max_coverage: maximum coverage at which we stop tallying the bases
@@ -78,7 +78,7 @@ def count_bases(bam, chrom, pos, max_coverage=1e10, min_qual=0):
                 continue
             # Only use alignments with cigar strings of only matches (no soft
             # clipped bases or indels)
-            elif read.alignment.cigar[0][0] != 0: 
+            elif read.alignment.cigar[0][0] != 0:
                 continue
             # don't check reads after a certain coverage (typically ~300X)
             elif sum(bases.values()) > max_coverage * 5:
@@ -86,7 +86,7 @@ def count_bases(bam, chrom, pos, max_coverage=1e10, min_qual=0):
             
             # convert the quality score to integer
             qual = read.alignment.query_qualities[read.query_position]
-            if IS_PYTHON2: 
+            if IS_PYTHON2:
                 qual = ord(qual)
             
             if qual < min_qual: # ignore low qual reads
@@ -105,8 +105,8 @@ def examine_variants(mosaic, child_bam, mom_bam, dad_bam):
     variants = mosaic.get_variants()
     
     for (chrom, pos) in sorted(variants):
-        # this follows the probability model set out in: 
-        # Illumina Inc. Illumina Technical Note: Somatic Variant Caller. (2014). 
+        # this follows the probability model set out in:
+        # Illumina Inc. Illumina Technical Note: Somatic Variant Caller. (2014).
         # at <http://res.illumina.com/documents/products/technotes/technote_somatic_variant_caller.pdf>
         
         min_qual = 20
@@ -135,7 +135,7 @@ def examine_variants(mosaic, child_bam, mom_bam, dad_bam):
         
         print(child_depth, mom_depth, dad_depth)
         
-        # currently hard code some depth filters (maybe swap this to based on the 
+        # currently hard code some depth filters (maybe swap this to based on the
         # global coverage)
         if child_depth > 200 or child_depth < 20:
             continue
@@ -163,7 +163,7 @@ def examine_variants(mosaic, child_bam, mom_bam, dad_bam):
             
             line = [chrom, pos, ref_base, alt_base, poisson_p, pp_dnm, mu, de_novo_reads, mom_prp, dad_prp, dng_depth, child_depth]
             table.append(line)
-
+    
     header = ["chrom", "pos", "ref", "alt", "poisson_p", "pp_dnm", "mu", \
         "de_novo_reads", "mom_prp", "dad_prp", "dng_depth", "child_depth"]
     
@@ -180,16 +180,26 @@ def main():
     # mosaic = get_mosaic_only_de_novos(standard, modified)
     mosaic = ParseDenovogear(modified)
     
-    examine_variants(mosaic, child_bam, mom_bam, dad_bam)
+    # examine_variants(mosaic, child_bam, mom_bam, dad_bam)
     
-    sys.stdout.write("chrom\tpos\tpp_dnm\tchild_read_depth\tmom_read_depth\tdad_read_depth\tchild_qual\tmom_qual\tdad_qual\n")
+    header = "sample_id\tchrom\tpos\t" \
+        + "ref\talt\tpp_dnm\tvariant_type\t" \
+        + "child_read_depth\tmom_read_depth\tdad_read_depth\t" \
+        + "child_qual\tmom_qual\tdad_qual\n"
+    
+    sys.stdout.write(header)
     
     variants = mosaic.get_variants()
-    for key in variants:
+    for key in sorted(variants):
         var = variants[key]
+        # print(var)
         depth = var["READ_DEPTH"]
         qual = var["MAPPING_QUALITY"]
-        out = "{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\n".format(var["ref_name"], var["coor"], var["pp_dnm"], depth["child"], depth["mom"], depth["dad"], qual["child"], qual["mom"], qual["dad"])
+        out = "{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}\t{10}\t{11}\t{12}\n"\
+            .format(var["ID"], var["ref_name"], var["coor"], \
+            var["ref_base"], var["ALT"], var["pp_dnm"], var["type"],  \
+            depth["child"], depth["mom"], depth["dad"], \
+            qual["child"], qual["mom"], qual["dad"])
         sys.stdout.write(out)
 
 if __name__ == '__main__':

@@ -10,7 +10,7 @@ def get_options():
     """ parse the command lines options for the script
     """
     
-    parser = argparse.ArgumentParser(description="Mereg denovogear output.")
+    parser = argparse.ArgumentParser(description="Merge denovogear output.")
     parser.add_argument("--remove-files", action="store_true", default=False, \
         help="whether to delete the individual denovogear files as we go")
     parser.add_argument("--folder", help="folder containing denovogear output")
@@ -40,7 +40,7 @@ def find_denovogear_paths(folder, path_pattern):
     """ selects denovogear output files by searching for the string pattern
     
     Args:
-        folder: path to folder containing denovogear output split across 
+        folder: path to folder containing denovogear output split across
             multiple chrom segments. Denovogear output filenames must contain
             "denovogear" and end with ".dnm".
         path_pattern: string used to select specific denovogear output files eg
@@ -52,7 +52,7 @@ def find_denovogear_paths(folder, path_pattern):
     
     paths = glob.glob(os.path.join(folder, "*denovogear*{0}*.dnm".format(path_pattern)))
     
-    # sort the paths correctly, which assumes the basename is something like: 
+    # sort the paths correctly, which assumes the basename is something like:
     # sample_id.denovogear.chrom.start-end.path_pattern.dnm
     regions = [path.split("denovogear.")[1] for path in paths]
     regions = [region.split("-")[0] for region in regions]
@@ -83,7 +83,7 @@ def aggregate_denovogear(folder, path_pattern, remove_files=False):
     """ extract the variants from the individual denovogear files
     
     Args:
-        folder: path to folder containing denovogear output split across 
+        folder: path to folder containing denovogear output split across
             multiple chrom segments. Denovogear output filenames must contain
             "denovogear" and end with ".dnm".
         path_pattern: string used to select specific denovogear output files eg
@@ -106,4 +106,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
