@@ -24,8 +24,7 @@ def get_options():
     
     parser = argparse.ArgumentParser(description="Filter denovogear calls " + \
         "from calling mosaic SNVs.")
-    parser.add_argument("--standard", help="denovogear output from standard samtools")
-    parser.add_argument("--modified", help="denovogear output from modified samtools")
+    parser.add_argument("--denovogear", help="denovogear output")
     parser.add_argument("--proband-bam", required=True, help="bam file for the proband.")
     parser.add_argument("--mother-bam", required=True, help="bam file for the mother.")
     parser.add_argument("--father-bam", required=True, help="bam file for the father.")
@@ -34,18 +33,7 @@ def get_options():
     
     return args.standard, args.modified, args.proband_bam, args.mother_bam, args.father_bam
 
-def get_mosaic_only_de_novos(standard, modified):
-    """ finds the variants that only occur in the mosaic analyses
-    """
-    
-    modified = ParseDenovogear(modified)
-    standard = ParseDenovogear(standard)
-    
-    mosaic_only = modified.get_subset(modified - standard)
-    
-    return mosaic_only
-
-def count_bases(bam, chrom, pos, max_coverage=1e10, min_qual=0):
+def count_bases(bam, chrom, pos, strand="both", max_coverage=1e10, min_qual=0):
     """ counts reads with different base calls at a chrom position
     
     Args:
@@ -53,6 +41,8 @@ def count_bases(bam, chrom, pos, max_coverage=1e10, min_qual=0):
         chrom: chromosome to use eg "chr1" or "1" depending on how the BAM is
             set up (specifically, an ID found in the BAMs sequence dictionary).
         pos: base position to count bases at.
+        strand: string of :forward", reverse" or "both" that indicates which
+            strand we should include bases from.
         max_coverage: maximum coverage at which we stop tallying the bases
         min_qual: minimum quality score required to include the base call
     
@@ -61,6 +51,7 @@ def count_bases(bam, chrom, pos, max_coverage=1e10, min_qual=0):
     """
     
     assert type(pos) == int
+    assert strand in ["forward", "reverse", "both"]
     
     bases = {"A": 0, "G": 0, "C": 0, "T": 0, "N": 0}
     
@@ -70,6 +61,11 @@ def count_bases(bam, chrom, pos, max_coverage=1e10, min_qual=0):
             continue
         
         for read in pileupcolumn.pileups:
+            if read.is_reverse() and strand == "forward":
+                continue
+            elif not read.is_reverse() and strand == "reverse":
+                continue
+            
             if read.alignment.is_duplicate: # ignore duplicate reads
                 print("duplicate")
                 continue
@@ -80,7 +76,7 @@ def count_bases(bam, chrom, pos, max_coverage=1e10, min_qual=0):
             # clipped bases or indels)
             elif read.alignment.cigar[0][0] != 0:
                 continue
-            # don't check reads after a certain coverage (typically ~300X)
+            # don't check reads after a certain coverage (typically ~1000X)
             elif sum(bases.values()) > max_coverage * 5:
                 break
             
@@ -173,14 +169,13 @@ def examine_variants(mosaic, child_bam, mom_bam, dad_bam):
 
 def main():
     
-    standard, modified, child_bam_path, mom_bam_path, dad_bam_path = get_options()
+    denovogear_path, child_bam_path, mom_bam_path, dad_bam_path = get_options()
     
     child_bam = pysam.AlignmentFile(child_bam_path)
     mom_bam = pysam.AlignmentFile(mom_bam_path)
     dad_bam = pysam.AlignmentFile(dad_bam_path)
-
-    # mosaic = get_mosaic_only_de_novos(standard, modified)
-    mosaic = ParseDenovogear(modified)
+    
+    mosaic = ParseDenovogear(denovogear_path)
     
     # examine_variants(mosaic, child_bam, mom_bam, dad_bam)
     

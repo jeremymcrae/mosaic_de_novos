@@ -42,7 +42,7 @@ You can merge the denovogear output from different chromosomes with:
 python src/filtering/merge_denovogear.py \
   --remove-files \ # removes the intermediate denovogear outputs
   --folder DIR_FOR_DENOVOGEAR_RESULTS \
-  --pattern PATTERN # text used to select denovogear files to read from, must be contained within the full path, eg "modified.dnm" or "standard.dnm"
+  --pattern PATTERN # text used to select denovogear files to read from, must be contained within the full path, eg "modified" or "standard"
 ```
 
 #### Reformatting

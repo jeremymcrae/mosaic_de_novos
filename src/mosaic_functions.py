@@ -77,7 +77,7 @@ def merge_denovogear(child_bam, child_id, job_ids):
     command = ["python3", "src/filtering/merge_denovogear.py", \
         "--folder", folder, \
         "--remove-files", \
-        "--pattern", "standard.dnm", \
+        "--pattern", "standard", \
         ">", os.path.join(folder, "{0}.denovogear.standard.dnm".format(child_id))]
     
     submit_bsub_job(command, job_id, dependent_id=job_ids)
@@ -87,7 +87,7 @@ def merge_denovogear(child_bam, child_id, job_ids):
     command = ["python3", "src/filtering/merge_denovogear.py", \
         "--folder", folder, \
         "--remove-files", \
-        "--pattern", "modified.dnm", \
+        "--pattern", "modified", \
         ">", os.path.join(folder, "{0}.denovogear.modified.dnm".format(child_id))]
     
     submit_bsub_job(command, job_id, dependent_id=job_ids)
