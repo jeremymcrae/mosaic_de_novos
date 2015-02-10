@@ -31,7 +31,7 @@ def get_options():
     
     args = parser.parse_args()
     
-    return args.standard, args.modified, args.proband_bam, args.mother_bam, args.father_bam
+    return args.denovogear, args.proband_bam, args.mother_bam, args.father_bam
 
 def count_bases(bam, chrom, pos, strand="both", max_coverage=1e10, min_qual=0):
     """ counts reads with different base calls at a chrom position
