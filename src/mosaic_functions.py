@@ -7,7 +7,8 @@ import pysam
 import sys
 import subprocess
 
-from extract_bam import get_irods_path_for_participant, extract_bam_from_irods
+from extract_bam import get_irods_path_for_participant, extract_bam_from_irods, \
+    find_bam_on_lustre
 
 chrom_lengths = {"1": 248956422, "2": 242193529, "3": 198295559,
     "4": 190214555, "5": 181538259, "6": 170805979, "7": 159345973, \
@@ -16,81 +17,90 @@ chrom_lengths = {"1": 248956422, "2": 242193529, "3": 198295559,
     "16": 90338345, "17": 83257441, "18": 80373285, "19": 58617616, \
     "20": 64444167, "21": 46709983, "22": 50818468, "X": 156040895}
 
-TEMP_DIR = "/lustre/scratch113/projects/ddd/users/jm33/bams"
+TEMP_DIR = "/nfs/users/nfs_j/jm33/temp_mosaic"
 BAM_EXTRACTOR = "/nfs/users/nfs_j/jm33/apps/VICAR/python/extract_bam.py"
+SANGER_IDS_PATH = "/nfs/ddd0/Data/datafreeze/ddd_data_releases/2014-11-04/person_sanger_decipher.txt"
+LOG_FILE = "/nfs/users/nfs_j/jm33/apps/mosaic_de_novos/mosaic_calling.log"
 
-def call_mosaic_de_novos(family, sex):
+def call_mosaic_de_novos(family, sex, all_sanger_ids=None):
     """ run through all of the chroms, region by region
     """
     
-    # bams = []
-    # bam_ids = []
-    # # make sure we have a bam dir
-    # for member in ["child", "mother", "father"]:
-    #     sample_id = family[member]
-    #     bam_paths = get_irods_path_for_participant(sample_id)
-    #     if len(bam_paths["lustre"]) == 0:
-    #         bam = find_bam_path(child_id, TEMP_DIR)
-    #         job_id = extract_bams(sample_id, bam_path=bam)
-    #         bam_ids.append(bam_ids)
-    #     else:
-    #         bam = bam_paths["lustre"][0]
-    #     bams.append(bam)
+    if all_sanger_ids is None:
+        all_sanger_ids = get_sanger_ids()
     
-    child_bam = find_bam_path(family["child"], TEMP_DIR)
-    mother_bam = find_bam_path(family["mother"], TEMP_DIR)
-    father_bam = find_bam_path(family["father"], TEMP_DIR)
+    find_bam_on_lustre(family["child"], all_sanger_ids)
+    
+    child_bam = find_bam_on_lustre(family["child"], all_sanger_ids)
+    mother_bam = find_bam_on_lustre(family["mother"], all_sanger_ids)
+    father_bam = find_bam_on_lustre(family["father"], all_sanger_ids)
     
     # check if any of the bam extraction jobs are still running
     
     child_id = get_sample_id_from_bam(child_bam)
     
-    job_ids = []
-    for chrom in chrom_lengths:
-        start = 1
-        end = chrom_lengths[chrom]
-        
-        job_id = "{0}:{1}-{2}".format(chrom, start, end) + get_random_string()
+    outdir = os.path.join(TEMP_DIR, child_id)
+    if not os.path.exists(outdir):
+        os.mkdir(outdir)
+    
+    commands = []
+    for chrom in sorted(chrom_lengths):
+        job_id = "mosaic_calling_{0}-chr{1}".format(child_id, chrom)
         
         command = ["python3", "src/mosaic_calling_denovogear.py", \
             "--proband-bam", child_bam, \
             "--mother-bam", mother_bam, \
             "--father-bam", father_bam, \
             "--proband-sex", sex, \
-            "--chrom", chrom,
-            "--start", str(start), \
-            "--stop", str(end)]
+            "--chrom", chrom, \
+            "--outdir", outdir]
         
-        # submit_bsub_job(command, job_id, dependent_id=bam_ids, memory=500, requeue_code=99)
-        submit_bsub_job(command, job_id, memory=500, requeue_code=99)
-        job_ids.append(job_id)
+        # command = " ".join(command)
+        # commands.append(command)
+        # print("have disabled job submission temporarily")
+        submit_bsub_job(command, job_id, memory=500, requeue_code=99, cpus=2)
     
-    merge_denovogear(child_bam, child_id, job_ids)
+    # commands += get_merge_merge_denovogear(outdir, child_id)
+    
+    # command = ["\n".join(commands)]
+    # submit_bsub_job(command, job_id, memory=500, requeue_code=99, queue="long", cpus=2)
 
-def merge_denovogear(child_bam, child_id, job_ids):
+def get_unprocessed_chroms(child_id):
+    
+    processed_chroms = []
+    with open(LOG_FILE) as handle:
+        for line in handle:
+            if child_id in line and "make bcf and run dng for" in line:
+                line = line.split("make bcf and run dng for ")
+                chrom = line[1].split(".")[0]
+                processed_chroms.append(chrom)
+    
+    # remove the last processed chrom, since the job may have failed. Need to
+    # avoid samples with completely processed chromosomes. Maybe chck for a
+    # failed job
+                
+
+def get_merge_merge_denovogear(folder, child_id):
     """ merge all the denovogear output files, following denovogear calling
     """
     
     # merge all the denovogear output for the standard samtools
-    folder = os.path.dirname(os.path.splitext(child_bam)[0])
-    job_id = "merge_standard_denovogear" + get_random_string()
-    command = ["python3", "src/filtering/merge_denovogear.py", \
+    merge_1 = ["python3", "src/filtering/merge_denovogear.py", \
         "--folder", folder, \
         "--remove-files", \
-        "--pattern", "standard", \
+        "--pattern", "{0}*standard".format(child_id), \
         ">", os.path.join(folder, "{0}.denovogear.standard.dnm".format(child_id))]
     
-    submit_bsub_job(command, job_id, dependent_id=job_ids)
-    
     # merge all the denovogear output for the modified samtools
-    job_id = "merge_modified_denovogear" + get_random_string()
-    command = ["python3", "src/filtering/merge_denovogear.py", \
+    merge_2 = ["python3", "src/filtering/merge_denovogear.py", \
         "--folder", folder, \
         "--remove-files", \
-        "--pattern", "modified", \
+        "--pattern", "{0}*modified".format(child_id), \
         ">", os.path.join(folder, "{0}.denovogear.modified.dnm".format(child_id))]
     
-    submit_bsub_job(command, job_id, dependent_id=job_ids)
+    commands = [" ".join(merge_1), " ".join(merge_2)]
+    
+    return commands
 
 def extract_bams(sample_id, bam_dir=None, bam_path=None):
     """ make sure we have bam files for all the family members
@@ -119,6 +129,27 @@ def extract_bams(sample_id, bam_dir=None, bam_path=None):
     submit_bsub_job(command, job_id, logfile=log)
     
     return job_id
+
+def get_sanger_ids():
+    """ make a dictionary of sanger IDs matched to DDD stable IDs.
+    
+    Returns:
+        dictionary of sanger IDs lists, keyed by their stable ID.
+    """
+    
+    sanger_ids = {}
+    with open(SANGER_IDS_PATH) as handle:
+        for line in handle:
+            line = line.strip().split("\t")
+            stable_id = line[0]
+            sanger_id = line[2]
+            
+            if stable_id not in sanger_ids:
+                sanger_ids[stable_id] = []
+            
+            sanger_ids[stable_id].append(sanger_id)
+    
+    return sanger_ids
 
 def make_corrected_vcf_header(bam_path, output=None):
     """ makes a header file that fixes the lack of explanatory lines
@@ -154,7 +185,7 @@ def make_corrected_vcf_header(bam_path, output=None):
     output.writelines(header)
     output.flush()
 
-def submit_bsub_job(command, job_id=None, dependent_id=None, memory=None, requeue_code=None, logfile=None):
+def submit_bsub_job(command, job_id=None, dependent_id=None, memory=None, requeue_code=None, logfile=None, queue="normal", cpus=1):
     """ construct a bsub job submission command
     
     Args:
@@ -174,6 +205,10 @@ def submit_bsub_job(command, job_id=None, dependent_id=None, memory=None, requeu
     
     job = "-J \"{0}\"".format(job_id)
     
+    threads=""
+    if cpus >1:
+        threads="-n{0} -R 'span[hosts=1]'".format(cpus)
+    
     mem = ""
     if memory is not None:
         mem = "-R 'select[mem>{0}] rusage[mem={0}]' -M {0}".format(memory)
@@ -192,7 +227,7 @@ def submit_bsub_job(command, job_id=None, dependent_id=None, memory=None, requeu
     if logfile is not None:
         log = logfile
     
-    preamble = ["bsub", job, dependent, requeue, "-q", "normal", "-o", log, mem]
+    preamble = ["bsub", job, dependent, requeue, "-q", queue, "-o", log, mem, threads]
     command = ["bash", "-c", "\""] + command + ["\""]
     
     command = " ".join(preamble + command)

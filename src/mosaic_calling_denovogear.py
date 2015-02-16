@@ -23,7 +23,8 @@ def get_options():
     parser.add_argument("--mother-bam", required=True, help="BAM file for mother")
     parser.add_argument("--father-bam", required=True, help="BAM File for father")
     parser.add_argument("--proband-sex", required=True, \
-        choices=["1", "M", "m", "Male", "male", "2", "F", "f", "Female", "female"], help="Sex of proband")
+        choices=["1", "M", "m", "Male", "male", "2", "F", "f", "Female", "female"], \
+        help="Sex of proband")
     parser.add_argument("--outdir", help="Folder to place denovogear results into")
     
     # and define the region of the genome to call
@@ -56,6 +57,8 @@ class MosaicCalling(object):
     modified_samtools = "/nfs/team29/aw15/samtoolsMod/samtools"
     old_bcftools = "/software/vertres/bin-external/bcftools-0.1.18"
     new_bcftools = os.path.join(hgi, "bcftools-1.1", "bin", "bcftools") # version 1.0+ is necessary for the reheader command
+    bgzip = "/software/vertres/bin-external/bgzip"
+    tabix = "/software/vertres/bin-external/tabix"
     pl_fixer = os.path.join(os.path.dirname(__file__), "fix_pl_field.py")
     
     # define the genome reference file (perhaps the DDD file isn't available to
@@ -203,12 +206,12 @@ class MosaicCalling(object):
             stdin=samtools.stdout, stdout=subprocess.PIPE)
         
         # compress and tabix the initial VCF output
-        subprocess.call(["bgzip"], stdin=to_vcf.stdout, stdout=temp_vcf)
+        subprocess.call([self.bgzip], stdin=to_vcf.stdout, stdout=temp_vcf)
         
         # fix the header of the initial VCF output
         subprocess.call([self.new_bcftools, "reheader", "--header", header.name, \
             temp_vcf.name], stdout=vcf)
-        subprocess.call(["tabix", "-f", "-p", "vcf", vcf.name])
+        subprocess.call([self.tabix, "-f", "-p", "vcf", vcf.name])
         
         # and remove the temp files
         temp_vcf.close()
