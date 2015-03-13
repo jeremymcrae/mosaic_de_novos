@@ -8,16 +8,13 @@ from __future__ import absolute_import
 import os
 import subprocess
 
-from src.mosaic_functions import symlink_bam, make_seq_dic_file, \
-    make_ped_for_trio, get_sanger_ids, call_mosaic_de_novos
+from src.utils import get_sanger_ids, call_mosaic_de_novos
 from src.extract_bam import find_bam_on_lustre
 from src.mosaic_calling_denovogear import MosaicCalling
 
-PROBANDS_FILE = "/nfs/users/nfs_j/jm33/apps/mosaic_de_novos/data/probands_without_diagnoses.txt"
-# TEMP_DIR = "/lustre/scratch113/projects/ddd/users/jm33/bams"
 FAMILIES_PED_FILE = "/nfs/ddd0/Data/datafreeze/ddd_data_releases/2014-11-04/family_relationships.txt"
 
-def open_families(probands_filename, ped_filename):
+def open_families(ped_filename):
     """ find the sample IDs for members of the trios
     """
     
@@ -45,10 +42,10 @@ def open_families(probands_filename, ped_filename):
     
     return families
 
-def get_repeats():
+def get_repeats(path):
     
     repeats = []
-    with open("samples_for_rerunning.tsv") as handle:
+    with open(path) as handle:
         for line in handle:
             line = line.strip().split("\t")
             sample_id = line[0]
@@ -60,8 +57,8 @@ def main():
     
     all_sanger_ids = get_sanger_ids()
     
-    families = open_families(PROBANDS_FILE, FAMILIES_PED_FILE)
-    repeats = get_repeats()
+    families = open_families(FAMILIES_PED_FILE)
+    repeats = get_repeats("samples_for_rerunning.tsv")
     
     # sort the families by DDD sample ID, so that we can reliably get specific
     # sets of families to run

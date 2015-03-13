@@ -1,5 +1,5 @@
 """ adjusts read group sample information in a BAM merged from BAMs belonging to
-two different individuals. 
+two different individuals.
 
 This script has an odd behaviour, where it requires the merged BAM file to be
 passed in as standard input, due to a quirk of how pysam handles standard input.
@@ -13,7 +13,7 @@ Usage:
 
 cat INTERMEDIATE_BAM | python fix_read_group.py \
     --subsampled SUBSAMPLED_BAM \
-    --alternate ALTERNATE_BAM 
+    --alternate ALTERNATE_BAM
 """
 
 from __future__ import division
@@ -26,7 +26,7 @@ import sys
 
 import pysam
 
-from mosaic_functions import get_sample_id_from_bam
+from utils import get_sample_id_from_bam
 
 
 def get_options():
@@ -83,7 +83,7 @@ def fix_merged_bam(subsampled_path, alternate_path):
     """ creates a merged BAM file from standard input
     
     This function takes a BAM passed in from standard input, and creates a new
-    BAM, with the header modified to incorporate the headers from the source 
+    BAM, with the header modified to incorporate the headers from the source
     BAMs, except that the sample ID is standardised between the two two source
     BAMs.
     
@@ -99,17 +99,17 @@ def fix_merged_bam(subsampled_path, alternate_path):
     sample_id = get_sample_id_from_bam(subsampled_path)
     merged_header = get_merged_bam_header(subsampled_path, alternate_path, sample_id)
     
-    # in addition to the parsed commandline options, we also pass in the 
+    # in addition to the parsed commandline options, we also pass in the
     # complete merged BAM as standard input, but pysam has difficultly with
-    # standard input, so we can't specify it as sys.stdin, instead it needs to 
+    # standard input, so we can't specify it as sys.stdin, instead it needs to
     # use the pysam syntax of reading a filename of "-".
     input_bam = pysam.AlignmentFile("-", "rb")
     
-    # open an output BAM, using the corrected header, and write the standard 
+    # open an output BAM, using the corrected header, and write the standard
     # input merged BAM to that.
     output_bam = pysam.AlignmentFile("-", "wb", header = merged_header)
     
-    for item in input_bam: 
+    for item in input_bam:
         output_bam.write(item)
     
 def main():

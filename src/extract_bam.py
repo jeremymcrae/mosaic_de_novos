@@ -20,13 +20,14 @@ import subprocess
 import os
 import argparse
 
+BASE = "/lustre/scratch114/projects/ddd/release-main"
 BAM_DIRS = [
-    "/lustre/scratch114/projects/ddd/release-main/20140908/sample_improved_bams_hgi_2/", \
-    "/lustre/scratch114/projects/ddd/release-main_2000/20140905/sample_improved_bams_hgi_2/", \
-    "/lustre/scratch114/projects/ddd/release-main_2000/20140910/sample_improved_bams_hgi_2/", \
-    "/lustre/scratch114/projects/ddd/release-main_fy3/20140806/sample_improved_bams_hgi_2/", \
-    "/lustre/scratch114/projects/ddd/release-main_fy3/20140916/sample_improved_bams_hgi_2/", \
-    "/lustre/scratch114/projects/ddd/release-main_y2/20140728/sample_improved_bams_hgi_2/"]
+    "{0}/20140908/sample_improved_bams_hgi_2/".format(BASE), \
+    "{0}_2000/20140905/sample_improved_bams_hgi_2/".format(BASE), \
+    "{0}_2000/20140910/sample_improved_bams_hgi_2/".format(BASE), \
+    "{0}_fy3/20140806/sample_improved_bams_hgi_2/".format(BASE), \
+    "{0}_fy3/20140916/sample_improved_bams_hgi_2/".format(BASE), \
+    "{0}_y2/20140728/sample_improved_bams_hgi_2/".format(BASE)]
 
 def get_options():
     """ gets options for the script, if this is being called externally

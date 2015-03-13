@@ -9,7 +9,7 @@ import time
 import logging
 import tempfile
 
-from mosaic_functions import get_sample_id_from_bam, make_corrected_vcf_header, \
+from utils import get_sample_id_from_bam, make_corrected_vcf_header, \
     make_ped_for_trio, symlink_bam, make_seq_dic_file, chrom_lengths
 
 logging.basicConfig(filename='mosaic_calling.log',level=logging.DEBUG)

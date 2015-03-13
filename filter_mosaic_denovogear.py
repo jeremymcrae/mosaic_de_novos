@@ -14,6 +14,7 @@ from scipy.stats import poisson
 import tabulate
 
 from src.filtering.parse_denovogear import ParseDenovogear
+from src.utils import get_sample_id_from_bam
 
 IS_PYTHON2 = sys.version_info[0] == 2
 IS_PYTHON3 = sys.version_info[0] == 3
@@ -33,14 +34,15 @@ def get_options():
     
     return args.denovogear, args.proband_bam, args.mother_bam, args.father_bam
 
-def count_bases(bam, chrom, pos, strand="both", max_coverage=1e10, min_qual=0):
+def count_bases(bam, chrom, start_pos, end_pos=None, strand="both", max_coverage=1e10, min_qual=0):
     """ counts reads with different base calls at a chrom position
     
     Args:
         bam: pysam bam object
         chrom: chromosome to use eg "chr1" or "1" depending on how the BAM is
             set up (specifically, an ID found in the BAMs sequence dictionary).
-        pos: base position to count bases at.
+        start_pos: start_base position to count bases at.
+        end_pos: end base position to count bases at, or None if single base SNV.
         strand: string of :forward", reverse" or "both" that indicates which
             strand we should include bases from.
         max_coverage: maximum coverage at which we stop tallying the bases
@@ -50,14 +52,16 @@ def count_bases(bam, chrom, pos, strand="both", max_coverage=1e10, min_qual=0):
         dictionary of read counts indexed by base calls
     """
     
-    assert type(pos) == int
+    assert type(start_pos) == int
     assert strand in ["forward", "reverse", "both"]
+    if end_pos is None:
+        end_pos = start_pos
     
-    bases = {"A": 0, "G": 0, "C": 0, "T": 0, "N": 0}
+    alleles = {}
     
     # count each base at the required site
-    for pileupcolumn in bam.pileup(chrom, pos - 1, pos):
-        if pileupcolumn.pos != pos - 1:
+    for pileupcolumn in bam.pileup(chrom, start_pos - 1, end_pos):
+        if pileupcolumn.pos != start_pos - 1:
             continue
         
         for read in pileupcolumn.pileups:
@@ -81,16 +85,22 @@ def count_bases(bam, chrom, pos, strand="both", max_coverage=1e10, min_qual=0):
                 break
             
             # convert the quality score to integer
-            qual = read.alignment.query_qualities[read.query_position]
+            qual = read.alignment.query_qualities[read.query_position:read.query_position + (end_pos - start_pos)]
             
             if qual < min_qual: # ignore low qual reads
                 continue
             
             # get the base call as a string
-            base = read.alignment.query_sequence[read.query_position]
-            bases[base] += 1
+            seq = read.alignment.query_sequence[read.query_position:read.query_position + (end_pos - start_pos)]
+            if seq not in bases:
+                alleles[seq] = 0
+            
+            alleles[seq] += 1
     
-    return bases
+    return alleles
+
+def get_dp4(bam, chrom, pos, ref_seq):
+    
 
 def examine_variants(mosaic, child_bam, mom_bam, dad_bam):
     
@@ -175,11 +185,14 @@ def main():
     mom_bam = pysam.AlignmentFile(mom_bam_path)
     dad_bam = pysam.AlignmentFile(dad_bam_path)
     
+    mother_id = get_sample_id_from_bam(mom_bam_path)
+    father_id = get_sample_id_from_bam(dad_bam_path)
+    
     mosaic = ParseDenovogear(denovogear_path)
     
     # examine_variants(mosaic, child_bam, mom_bam, dad_bam)
     
-    header = "sample_id\tchrom\tpos\t" \
+    header = "child_id\tmother_id\tfather_id\tchrom\tpos\t" \
         + "ref\talt\tpp_dnm\tvariant_type\t" \
         + "child_read_depth\tmom_read_depth\tdad_read_depth\t" \
         + "child_qual\tmom_qual\tdad_qual\n"
@@ -192,8 +205,8 @@ def main():
         # print(var)
         depth = var["READ_DEPTH"]
         qual = var["MAPPING_QUALITY"]
-        out = "{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}\t{10}\t{11}\t{12}\n"\
-            .format(var["ID"], var["ref_name"], var["coor"], \
+        out = "{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}\t{10}\t{11}\t{12}\t{13}\t{14}\n"\
+            .format(var["ID"], mother_id, father_id, var["ref_name"], var["coor"], \
             var["ref_base"], var["ALT"], var["pp_dnm"], var["type"],  \
             depth["child"], depth["mom"], depth["dad"], \
             qual["child"], qual["mom"], qual["dad"])
@@ -201,5 +214,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-    
