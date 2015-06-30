@@ -93,9 +93,9 @@ def fix_merged_vcf(merged):
     # sometimes we just pass in the standard input, rather than a filename. The
     # standard input comes as an opened file-like interface, but given a
     # filename, the filename needs to be opened.
-    if not isinstance(merged, file):
+    try:
         f = open(merged, "r")
-    else:
+    except TypeError:
         f = merged
     
     header, first_line = get_header(f)
