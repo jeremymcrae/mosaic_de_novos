@@ -1,6 +1,8 @@
 """ a class to construct and run the mosaic de novo calling commands for a trio
 """
 
+from __future__ import division
+
 import os
 import sys
 import argparse
@@ -126,14 +128,12 @@ class MosaicCalling(object):
         
         try:
             # run samtools, with the modified samtools used for the child
-            child_vcf = self.samtools(self.child_bam, region)
             mother_vcf = self.samtools(self.mother_bam, region)
             father_vcf = self.samtools(self.father_bam, region)
-            new_child_vcf = self.samtools(self.child_bam, region, modified=True)
+            child_vcf = self.samtools(self.child_bam, region, modified=True)
             
             # prepare a BCF file for denovogear, then run denovogear on that
-            self.run_denovogear(child_vcf, mother_vcf, father_vcf, region, "standard")
-            self.run_denovogear(new_child_vcf, mother_vcf, father_vcf, region, "modified")
+            self.run_denovogear(child_vcf, mother_vcf, father_vcf, region, "modified")
         finally:
             # ensure we remove the temporary files that were produced
             self.ped.close()
@@ -194,7 +194,9 @@ class MosaicCalling(object):
             time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()), region_path, bam))
         
         # set the path to the output VCF
-        vcf = tempfile.NamedTemporaryFile(mode="w", suffix=".vcf.gz")
+        vcf = tempfile.NamedTemporaryFile(mode="w", suffix=".vcf.gz", \
+            dir=os.path.dirname(bam), delete=False)
+        logging.info("\t{}".format(vcf.name))
         self.temp_vcfs.append(vcf)
         
         temp_vcf = tempfile.NamedTemporaryFile(mode="w", suffix=".vcf.gz")
