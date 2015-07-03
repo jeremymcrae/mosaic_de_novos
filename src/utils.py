@@ -366,3 +366,23 @@ def get_random_string():
         hash_string = hash_string.strip()
     
     return hash_string
+
+def get_bjobs():
+    """ get a list of submitted jobs
+    """
+    
+    command = ["bjobs", "-o", "\"JOBID", "USER", "STAT", "QUEUE", "JOB_NAME", "delimiter=';'\""]
+    command = " ".join(command)
+    output = subprocess.check_output(command, shell=True, stderr=open(os.devnull, "w"))
+    
+    bjobs = []
+    for line in output.split("\n"):
+        if line.startswith("JOBID") or line == "":
+            continue
+        
+        line = line.strip().split(";")
+        entry = {"jobid": line[0], "user":line[1], "stat":line[2], \
+            "queue":line[3], "job_name":line[4]}
+        bjobs.append(entry)
+    
+    return bjobs

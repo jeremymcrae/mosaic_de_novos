@@ -14,13 +14,8 @@ import json
 import tempfile
 import itertools
 
-# import pysam
-# from scipy.stats import poisson
-# import tabulate
-
 from src.filtering.parse_denovogear import ParseDenovogear
 from src.utils import get_sanger_ids
-# from src.utils import get_sample_id_from_bam
 
 OUTPUT_DIR = "/nfs/users/nfs_j/jm33/mosaic"
 DEPTHS_SCRIPT = "/nfs/users/nfs_j/jm33/apps/clinical-filter/scripts/get_trio_depths.py"
