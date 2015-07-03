@@ -6,11 +6,9 @@ from __future__ import absolute_import
 import os
 import random
 import pysam
-import sys
 import subprocess
 
-from src.extract_bam import get_irods_path_for_participant, extract_bam_from_irods, \
-    find_bam_on_lustre
+from src.extract_bam import find_bam_on_lustre
 
 chrom_lengths = {"1": 248956422, "2": 242193529, "3": 198295559,
     "4": 190214555, "5": 181538259, "6": 170805979, "7": 159345973, \
@@ -25,22 +23,19 @@ SANGER_IDS_PATH = "/nfs/ddd0/Data/datafreeze/ddd_data_releases/2014-11-04/person
 LOG_FILE = "/nfs/users/nfs_j/jm33/apps/mosaic_de_novos/mosaic_calling.log"
 
 def call_mosaic_de_novos(family, sex, all_sanger_ids=None):
-    """ run through all of the chroms, region by region
+    """ run through all of the chroms
     """
     
     if all_sanger_ids is None:
         all_sanger_ids = get_sanger_ids()
     
-    find_bam_on_lustre(family["child"], all_sanger_ids)
-    
+    # find the location of the BAMs for the family members
     child_bam = find_bam_on_lustre(family["child"], all_sanger_ids)
     mother_bam = find_bam_on_lustre(family["mother"], all_sanger_ids)
     father_bam = find_bam_on_lustre(family["father"], all_sanger_ids)
     
-    # check if any of the bam extraction jobs are still running
-    
+    # make sure there is a output folder available for the proband
     child_id = get_sample_id_from_bam(child_bam)
-    
     outdir = os.path.join(TEMP_DIR, child_id)
     if not os.path.exists(outdir):
         os.mkdir(outdir)
@@ -57,15 +52,13 @@ def call_mosaic_de_novos(family, sex, all_sanger_ids=None):
             "--chrom", chrom, \
             "--outdir", outdir]
         
-        # command = " ".join(command)
-        # commands.append(command)
-        # print("have disabled job submission temporarily")
-        submit_bsub_job(command, job_id, memory=500, requeue_code=99, cpus=2)
+        command = " ".join(command)
+        commands.append(command)
     
-    # commands += get_merge_merge_denovogear(outdir, child_id)
+    commands += get_merge_merge_denovogear(outdir, child_id)
     
-    # command = ["\n".join(commands)]
-    # submit_bsub_job(command, job_id, memory=500, requeue_code=99, queue="long", cpus=2)
+    command = ["\n".join(commands)]
+    submit_bsub_job(command, job_id, memory=500, requeue_code=99, queue="long", cpus=2)
 
 def get_unprocessed_chroms(child_id):
     
@@ -86,23 +79,16 @@ def get_merge_merge_denovogear(folder, child_id):
     """ merge all the denovogear output files, following denovogear calling
     """
     
-    # merge all the denovogear output for the standard samtools
-    merge_1 = ["python3", "src/filtering/merge_denovogear.py", \
-        "--folder", folder, \
-        "--remove-files", \
-        "--pattern", "{0}*standard".format(child_id), \
-        ">", os.path.join(folder, "{0}.denovogear.standard.dnm".format(child_id))]
-    
     # merge all the denovogear output for the modified samtools
-    merge_2 = ["python3", "src/filtering/merge_denovogear.py", \
+    merge = ["python3", "src/filtering/merge_denovogear.py", \
         "--folder", folder, \
         "--remove-files", \
         "--pattern", "{0}*modified".format(child_id), \
         ">", os.path.join(folder, "{0}.denovogear.modified.dnm".format(child_id))]
     
-    commands = [" ".join(merge_1), " ".join(merge_2)]
+    command = [" ".join(merge)]
     
-    return commands
+    return command
 
 def extract_bams(sample_id, bam_dir=None, bam_path=None):
     """ make sure we have bam files for all the family members
