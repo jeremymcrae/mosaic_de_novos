@@ -1,13 +1,15 @@
 """ a bunch of functions to help with mosaic de novo calling
 """
 
+from __future__ import absolute_import
+
 import os
 import random
 import pysam
 import sys
 import subprocess
 
-from extract_bam import get_irods_path_for_participant, extract_bam_from_irods, \
+from src.extract_bam import get_irods_path_for_participant, extract_bam_from_irods, \
     find_bam_on_lustre
 
 chrom_lengths = {"1": 248956422, "2": 242193529, "3": 198295559,
