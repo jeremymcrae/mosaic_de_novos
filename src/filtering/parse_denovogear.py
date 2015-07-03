@@ -70,7 +70,7 @@ class ParseDenovogear(object):
             key = fields[i].strip(":")
             variant[key] = fields[i + 1]
         
-        # and parse the
+        # and parse the read depth and quality metrics
         variant = self._parse_read_depth(fields, read_idx, variant)
         variant = self._parse_qual(fields, read_idx, variant)
         
@@ -82,6 +82,10 @@ class ParseDenovogear(object):
         if "id" in variant:
             variant["ID"] = variant["id"]
             del variant["id"]
+        
+        variant["alt_allele"] = self._parse_alt_allele(variant)
+        if len(variant["alt_allele"]) == 1:
+            variant["alt_allele"] = variant["alt_allele"].pop()
         
         return variant
     
@@ -129,40 +133,45 @@ class ParseDenovogear(object):
         
         return variant
     
-    def get_variants(self):
-        """ get the variants loaded from a denovogear file
-        
-        Returns:
-            dictionary of parsed variant lines, indexed by (chrom, pos) tuples
+    def _parse_alt_allele(self, variant):
+        """ grab the alt allele for the variant
         """
         
-        return self.variants
+        alt_allele = set(variant["ALT"].split(","))
+        alt_allele = alt_allele - set(["X"])
+        
+        # get the alleles from the targetted genotype
+        alleles = set(list(variant["tgt"].split("/")[0]))
+        
+        # intersect the alt alleles with the alleles in the targetted genotypes
+        if len(alt_allele) > 1:
+            alt_allele = alt_allele & alleles
+        
+        # make sure we only have a single alt allele left
+        alt_allele = list(alt_allele)
+        
+        return alt_allele
      
     def __sub__(self, other):
         """ get the variants that are unique to the current instance
         """
         
-        return set(self.get_variants()) - set(other.get_variants())
+        return set(self.variants) - set(other.variants)
     
     def __iter__(self):
-        return iter(self.variants)
-    
-    def get_subset(self, keys):
-        """ gets a subset of variants given a list of keys
-        
-        Args:
-            keys: list of (chrom, pos) tuples, all of which must occur in
-                self.variants
-        
-        Returns:
-            dictionary of variants, restricted to the set with matching keys
+        """ get an iterable for the class, to iterate through the variants
         """
         
-        variants = self.get_variants()
+        return iter(self.variants)
+    
+    def __getitem__(self, key):
+        """ gets a variant from the class
         
-        subset = {}
-        for key in keys:
-            if key in variants:
-                subset[key] = variants[key]
+        Args:
+            key: (chrom, pos) tuple,  which must occur in self.variants
         
-        return subset
+        Returns:
+            dictionary entry for variant with matching key
+        """
+        
+        return self.variants[key]
