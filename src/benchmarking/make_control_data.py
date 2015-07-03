@@ -13,7 +13,7 @@ import pysam
 BENCHMARKING_DIR = "/lustre/scratch113/projects/ddd/users/jm33/mosaic_benchmarking/"
 SAMTOOLS = "/software/vertres/bin-external/samtools-0.1.18"
 BEDTOOLS = "/software/vertres/bin-external/bedtools"
-FIX_READ_GROUP = "/nfs/users/nfs_j/jm33/apps/mosaic_de_novos/src/fix_read_group.py"
+FIX_READ_GROUP = "/nfs/users/nfs_j/jm33/apps/mosaic_de_novos/src/benchmarking/fix_read_group.py"
 
 # # copy all of Art's files
 # rsync -vaP /lustre/scratch113/projects/mu/users/aw15/samtoolsMod/* /lustre/scratch113/projects/ddd/users/jm33/mosaic_benchmarking
@@ -60,8 +60,8 @@ def get_median_coverage(bam_path, chrom):
         if zero_depth_bases == None and depth == 0:
             zero_depth_bases = n_bases
         
-        # when we calculate the cumulative proportion, we need to account for 
-        # the unsequenceable section of the chromosome, which is given by the 
+        # when we calculate the cumulative proportion, we need to account for
+        # the unsequenceable section of the chromosome, which is given by the
         # bases with zero depth
         if adjusted_chrom_length == None:
             adjusted_chrom_length = chrom_length - zero_depth_bases
@@ -101,7 +101,7 @@ def subsample_bam(input_bam, alternate_bam, merged_path, proportion):
         input_bam], stdout=subprocess.PIPE)
     
     # merge the bams with: samtools merge MERGED_PATH BAM1_PATH BAM2_PATH
-    # where MERGED_PATH can be "-" for standard out, and one BAM_PATH can be 
+    # where MERGED_PATH can be "-" for standard out, and one BAM_PATH can be
     # /dev/stdin for stdin (merge cannot use the normal stdin pipe).
     merge = subprocess.Popen([SAMTOOLS, "merge", "-", alternate_bam, \
         "/dev/stdin"], stdin=subsampled.stdout, stdout=subprocess.PIPE)
@@ -135,6 +135,3 @@ if __name__ == '__main__':
 
 # # then run modified and standard samtools to call de novos
 # SAMTOOLS mpileup -p0.5 -uf ref.fa sample.bam | bcftools view -vcg - > var.raw.vcf
-
-
-
