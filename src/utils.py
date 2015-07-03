@@ -235,30 +235,6 @@ def submit_bsub_job(command, job_id=None, dependent_id=None, memory=None, requeu
     command = " ".join(preamble + command)
     subprocess.call(command, shell=True)
 
-def symlink_bam(current_path, new_path):
-    """ make a new bam for the child for using with the standard samtools,
-    so it has a different filename
-    
-    Args:
-        current_path: path to exisitng BAM file
-        new_path: path for symlinked file
-    
-    Returns:
-        nothing
-    """
-    
-    # don't relink the BAM if the symlink already exists
-    if os.path.exists(new_path):
-        return
-    
-    # allow for if the symlink exists, but doesn't point to a valid path
-    if os.path.lexists(new_path):
-        os.remove(new_path)
-        os.remove(new_path + ".bai")
-        
-    os.symlink(current_path, new_path)
-    os.symlink(current_path + ".bai", new_path + ".bai")
-
 def make_seq_dic_file(seq_dic):
     """ make sure we have a contig dictionary file available for bcftools
     

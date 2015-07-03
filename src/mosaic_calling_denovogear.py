@@ -12,7 +12,7 @@ import logging
 import tempfile
 
 from utils import get_sample_id_from_bam, make_corrected_vcf_header, \
-    make_ped_for_trio, symlink_bam, make_seq_dic_file, chrom_lengths
+    make_ped_for_trio, make_seq_dic_file, chrom_lengths
 
 logging.basicConfig(filename='mosaic_calling.log',level=logging.DEBUG)
 
