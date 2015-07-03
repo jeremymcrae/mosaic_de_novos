@@ -4,9 +4,7 @@
 from __future__ import absolute_import
 
 import os
-import random
 import pysam
-import subprocess
 
 from src.extract_bam import find_bam_on_lustre
 from src.lsf_jobs import submit_bsub_job, get_random_string

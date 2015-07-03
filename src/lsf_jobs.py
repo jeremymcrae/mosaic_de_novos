@@ -2,6 +2,10 @@
 jobs.
 """
 
+import subprocess
+import random
+import os
+
 def submit_bsub_job(command, job_id=None, dependent_id=None, memory=None, requeue_code=None, logfile=None, queue="normal", cpus=1):
     """ construct a bsub job submission command
     
