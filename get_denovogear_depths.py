@@ -110,14 +110,17 @@ def main():
         
         coordinates.append(entry)
     
-    # write the variant coordinates to a file
-    json_handle = tempfile.NamedTemporaryFile()
-    json.dump(coordinates, json_handle, indent=4)
-    json_handle.flush()
-    
-    # get the forward and reverse ref and alt depths for each variant
-    depths = subprocess.check_output(["python", DEPTHS_SCRIPT, "--proband", proband, "--json-input", json_handle.name, "--by-strand"])
-    depths = json.loads(depths)
+    if len(coordiantes) > 0:
+        # write the variant coordinates to a file
+        json_handle = tempfile.NamedTemporaryFile()
+        json.dump(coordinates, json_handle, indent=4)
+        json_handle.flush()
+        
+        # get the forward and reverse ref and alt depths for each variant
+        depths = subprocess.check_output(["python", DEPTHS_SCRIPT, "--proband", proband, "--json-input", json_handle.name, "--by-strand"])
+        depths = json.loads(depths)
+    else:
+        depths = []
     
     output = open(os.path.join(OUTPUT_DIR, "{}_dng_depths.txt".format(proband)), "w")
     write_output(output, mosaic, depths)

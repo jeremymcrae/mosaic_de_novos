@@ -25,10 +25,14 @@ class ParseDenovogear(object):
         with open(path, "r") as f:
             for line in f:
                 if line.startswith("DENOVO"):
-                    var = self._parse_line(line)
-                    chrom = self._convert_chrom_to_numeric(var["ref_name"])
-                    key = (chrom, int(var["coor"]))
-                    self.variants[key] = var
+                    try:
+                        var = self._parse_line(line)
+                        chrom = self._convert_chrom_to_numeric(var["ref_name"])
+                        key = (chrom, int(var["coor"]))
+                        self.variants[key] = var
+                    except ValueError:
+                        print("file at {} might not have a complete set of de \
+                            novo calls. Variant line is incomplete: {}".format(path, line))
     
     def _convert_chrom_to_numeric(self, chrom):
         """ converts a chromosome string to equivalent integer, for easy sorting
