@@ -37,6 +37,10 @@ def get_options():
     parser.add_argument("--proportion", type=float, default=0.25, \
         help="Expected proportion of somatic mosaicism")
     
+    parser.add_argument("--generate-merged-bcf", default=False, action="store_true",
+        help="Whether to only create a merged BCF for the trio, rather than"
+            "running denovogear on a temporary BCF.")
+    
     args = parser.parse_args()
     
     region = (args.chrom, args.start, args.stop)
@@ -45,7 +49,8 @@ def get_options():
         sys.exit("error: argument --proportion: the expected proportion of somatic mosaicism must be between 0 and 1.")
     
     return args.proband_bam, args.mother_bam, args.father_bam, \
-        args.proband_sex, region, args.outdir, args.proportion
+        args.proband_sex, region, args.outdir, args.proportion, \
+        args.generate_merged_bcf
 
 class MosaicCalling(object):
     """ class to construct and run the mosaic de novo calling commands for a trio
@@ -75,7 +80,8 @@ class MosaicCalling(object):
     seq_dic = tempfile.NamedTemporaryFile(mode="w")
     make_seq_dic_file(seq_dic)
          
-    def __init__(self, child_bam, mother_bam, father_bam, sex, output_dir=None, proportion=0.25):
+    def __init__(self, child_bam, mother_bam, father_bam, sex, output_dir=None, \
+        proportion=0.25, generate_merged_bcf=False):
         """ initiates the class with the BAM paths etc
         
         Args:
@@ -109,6 +115,8 @@ class MosaicCalling(object):
         
         self.proportion = proportion
         assert 0 <= self.proportion <= 1
+        
+        self.generate_merged_bcf = generate_merged_bcf
     
     def call_mosaic_de_novos_in_region(self, region):
         """ call the rest of the functions in this class, in the correct order,
@@ -257,11 +265,19 @@ class MosaicCalling(object):
             self.seq_dic.name, "-Sb", "/dev/stdin"], stdin=pl_fix.stdout,
             stdout=subprocess.PIPE)
         
-        # and run de novogear on the output
         dnm = os.path.join(self.output_dir, "{0}.denovogear.{1}.{2}.dnm".format(child_id, region_path, modify))
-        subprocess.call([self.denovogear, "dnm", dng_chr_type, "--ped", \
-            self.ped.name, "--bcf", "/dev/stdin"], stdin=bcf.stdout,  \
-            stdout=open(dnm, "w"), stderr=open(os.devnull, "w"))
+        bcf_path = os.path.join(self.output_dir, "{0}.denovogear.{1}.{2}.bcf".format(child_id, region_path, modify))
+        if args.generate_merged_bcf:
+            with open(bcf_path, "w") as output:
+                output.write(bcf.stdout)
+            subprocess.call([self.denovogear, "dnm", dng_chr_type, "--ped", \
+                self.ped.name, "--bcf", bcf_path],  stdout=open(dnm, "w"), \
+                stderr=open(os.devnull, "w"))
+        else:
+            # and run de novogear on the output
+            subprocess.call([self.denovogear, "dnm", dng_chr_type, "--ped", \
+                self.ped.name, "--bcf", "/dev/stdin"], stdin=bcf.stdout,  \
+                stdout=open(dnm, "w"), stderr=open(os.devnull, "w"))
     
     def remove_vcfs(self):
         """ remove the temporary VCF files for the region
@@ -285,9 +301,11 @@ def main():
     """ runs mosaic calling for a single region of the genome in a single trio
     """
     
-    proband_bam, mother_bam, father_bam, proband_sex, region, outdir, proportion = get_options()
+    proband_bam, mother_bam, father_bam, proband_sex, region, outdir, \
+        proportion, generate_merged_bcf = get_options()
     
-    caller = MosaicCalling(proband_bam, mother_bam, father_bam, proband_sex, outdir, proportion)
+    caller = MosaicCalling(proband_bam, mother_bam, father_bam, proband_sex, \
+        outdir, proportion, generate_merged_bcf)
     
     try:
         caller.call_mosaic_de_novos_in_region(region)
