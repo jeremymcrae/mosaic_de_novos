@@ -20,14 +20,7 @@ import subprocess
 import os
 import argparse
 
-BASE = "/lustre/scratch114/projects/ddd/release-main"
-BAM_DIRS = [
-    "{0}/20140908/sample_improved_bams_hgi_2/".format(BASE), \
-    "{0}_2000/20140905/sample_improved_bams_hgi_2/".format(BASE), \
-    "{0}_2000/20140910/sample_improved_bams_hgi_2/".format(BASE), \
-    "{0}_fy3/20140806/sample_improved_bams_hgi_2/".format(BASE), \
-    "{0}_fy3/20140916/sample_improved_bams_hgi_2/".format(BASE), \
-    "{0}_y2/20140728/sample_improved_bams_hgi_2/".format(BASE)]
+BAM_PATHS = "/nfs/ddd0/Data/datafreeze/ddd_data_releases/2015-04-13/bam_paths.txt"
 
 def get_options():
     """ gets options for the script, if this is being called externally
@@ -44,39 +37,6 @@ def get_options():
     
     return args.sample_id, args.dir, args.path
 
-def find_bam_on_lustre(sample_id, SANGER_IDS, all=False):
-    """ finds the most appropriate bam to use for a sample.
-    
-    This depends on the BAMs for samples being available in a few folders.
-    
-    Args:
-        sample_id: DDD sample ID eg DDDP000001
-        SANGER_IDS: dictionary of sanger IDs for samples, keyed by DDD stable ID
-        all: True/False, whether to return all BAM paths for a sample
-    
-    Returns:
-        path to bam file for sample.
-    """
-    
-    sanger_ids = SANGER_IDS[sample_id]
-    
-    bam_paths = []
-    for folder in BAM_DIRS:
-        for sanger_id in sanger_ids:
-            path = os.path.join(folder, "{0}.bam".format(sanger_id))
-            if os.path.exists(path):
-                bam_paths.append(path)
-    
-    if bam_paths == []:
-        return None
-    
-    if not all:
-        # sort the bame paths by creation date, use the most recently created
-        bam_paths = sorted(bam_paths, key=os.path.getctime)
-        return bam_paths[-1]
-    else:
-        return bam_paths
-
 def get_irods_path_for_participant(sample_id):
     """ finds the BAM location for a participant from IRODS
     
@@ -87,25 +47,15 @@ def get_irods_path_for_participant(sample_id):
         path to the BAM file in IRODs
     """
     
-    # set up the environment to be able to use adb
-    os.environ["PERL5LIB"] = "/software/ddd/perl5/lib/perl5:/software/ddd/external/vcftools/0.1.11/lib/perl5/site_perl"
-    os.environ["DDD_UBER_DB"] = "DDD_PROD"
+    with open(BAM_PATHS) as handle:
+        for line in handle:
+            line = line.strip().split("\t")
+            person_id = line[0]
+            path = line[4]
+            if person_id == sample_id:
+                return path
     
-    # use adb to identify the correct sample BAM within IRODs
-    output = subprocess.check_output(["/software/ddd/perl5/bin/adb", \
-        "list-datasets", "--person-id", sample_id, "--type", "ibam"])
-    output = output.strip().split("\t")
-    
-    # find the BAM path from the adb output, we want the nonarchived lustre BAM
-    # files, and the IRODS BAM paths
-    paths = {"irods": [], "lustre": []}
-    for value in output:
-        if value.startswith("irods"):
-            paths["irods"].append(value.strip("irods:")[2:])
-        elif value.startswith("/lustre") and "archive" not in value:
-            paths["lustre"].append(value)
-    
-    return paths
+    return None
 
 def extract_bam_from_irods(irods_bam, output_bam):
     """ extracts BAM and BAI files for a participant from IRODS
@@ -142,9 +92,6 @@ def main():
     
     sample_id, output_dir, output_path = get_options()
     
-    bam_paths = get_irods_path_for_participant(sample_id)
-    print(bam_paths)
-    
     if output_dir is not None:
         output_dir = os.path.join(output_dir, sample_id)
         output_path = os.path.join(output_dir, sample_id + ".bam")
@@ -156,8 +103,8 @@ def main():
         # make sure there's a folder for the BAM (use sample specific folders)
         if not os.path.exists(output_dir):
             os.mkdir(output_dir)
-        bam_paths = get_irods_path_for_participant(sample_id)
-        extract_bam_from_irods(bam_paths["irods"], output_path)
+        bam = get_irods_path_for_participant(sample_id)
+        extract_bam_from_irods(bam, output_path)
         
     
 

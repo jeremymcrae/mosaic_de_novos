@@ -6,7 +6,7 @@ from __future__ import absolute_import
 import os
 import pysam
 
-from src.extract_bam import find_bam_on_lustre
+from src.lustre_bam import find_bam_on_lustre
 from src.lsf_jobs import submit_bsub_job, get_random_string
 
 chrom_lengths = {"1": 248956422, "2": 242193529, "3": 198295559,
