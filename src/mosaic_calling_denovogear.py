@@ -202,8 +202,7 @@ class MosaicCalling(object):
             time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()), region_path, bam))
         
         # set the path to the output VCF
-        vcf = tempfile.NamedTemporaryFile(mode="w", suffix=".vcf.gz", \
-            dir=os.path.dirname(bam), delete=False)
+        vcf = tempfile.NamedTemporaryFile(mode="w", suffix=".vcf.gz", delete=False)
         logging.info("\t{}".format(vcf.name))
         self.temp_vcfs.append(vcf)
         
