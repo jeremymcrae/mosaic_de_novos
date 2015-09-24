@@ -267,7 +267,6 @@ class MosaicCalling(object):
         dnm = os.path.join(self.output_dir, "{0}.denovogear.{1}.{2}.dnm".format(child_id, region_path, modify))
         bcf_path = os.path.join(self.output_dir, "{0}.denovogear.{1}.{2}.bcf".format(child_id, region_path, modify))
         if self.generate_merged_bcf:
-            print(bcf.stdout)
             with open(bcf_path, "w") as output:
                 for line in bcf.stdout:
                     output.write(line)
