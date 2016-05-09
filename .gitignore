@@ -1,6 +1,7 @@
 *.pyc
 *__pycache__/*
-data/
+build/
+dist/
 *.log
 *logs/
 seq_dic.txt
