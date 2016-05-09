@@ -2,6 +2,8 @@
 *__pycache__/*
 build/
 dist/
+*.egg-info/
+*.egg
 *.log
 *logs/
 seq_dic.txt
