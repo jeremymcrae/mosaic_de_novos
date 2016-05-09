@@ -8,9 +8,9 @@ from __future__ import absolute_import
 import os
 import subprocess
 
-from src.utils import get_sanger_ids, call_mosaic_de_novos
-from src.extract_bam import find_bam_on_lustre
-from src.mosaic_calling_denovogear import MosaicCalling
+from mosaic_de_novos.utils import get_sanger_ids, call_mosaic_de_novos
+from mosaic_de_novos.extract_bam import find_bam_on_lustre
+from mosaic_de_novos.mosaic_calling_denovogear import MosaicCalling
 
 FAMILIES_PED_FILE = "/nfs/ddd0/Data/datafreeze/ddd_data_releases/2014-11-04/family_relationships.txt"
 

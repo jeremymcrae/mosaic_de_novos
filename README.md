@@ -11,7 +11,7 @@ git clone https://github.com/jeremymcrae/mosaic_de_novos.git
 cd mosaic_de_novos
 
 # Call mosaics for a single chromosome with:
-python src/mosaic_calling_denovo_gear.py \
+python mosaic_de_novos/mosaic_calling_denovo_gear.py \
   --proband-bam PROBAND_BAM_PATH \
   --mother-bam MOTHER_BAM_PATH \
   --father-bam FATHER_BAM_PATH \
@@ -38,7 +38,7 @@ pip install --user pysam
 #### Merging
 You can merge the denovogear output from different chromosomes with:
 ```sh
-python src/filtering/merge_denovogear.py \
+python mosaic_de_novos/filtering/merge_denovogear.py \
   --remove-files \ # removes the intermediate denovogear outputs
   --folder RESULTS_DIR \
   --pattern PATTERN # text used to select denovogear files to read from, must be contained within the full path, eg "modified" or "standard"

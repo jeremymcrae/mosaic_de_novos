@@ -14,8 +14,8 @@ import json
 import tempfile
 import itertools
 
-from src.filtering.parse_denovogear import ParseDenovogear
-from src.utils import get_sanger_ids
+from mosaic_de_novos.filtering.parse_denovogear import ParseDenovogear
+from mosaic_de_novos.utils import get_sanger_ids
 
 OUTPUT_DIR = "/nfs/users/nfs_j/jm33/mosaic"
 DEPTHS_SCRIPT = "/nfs/users/nfs_j/jm33/apps/clinical-filter/scripts/get_trio_depths.py"
