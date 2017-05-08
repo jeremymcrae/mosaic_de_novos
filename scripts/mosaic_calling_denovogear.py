@@ -61,8 +61,6 @@ def get_options():
     
     args = parser.parse_args()
     
-    region = (args.chrom, args.start, args.stop)
-    
     if args.proportion > 1 or args.proportion < 0:
         sys.exit('error: argument --proportion: the expected proportion of'
             'somatic mosaicism must be between 0 and 1.')
@@ -77,6 +75,8 @@ def main():
     
     caller = MosaicCalling(args.proband_bam, args.mother_bam, args.father_bam,
         args.proband_sex, args.outdir, args.proportion, args.generate_merged_bcf)
+    
+    region = (args.chrom, args.start, args.stop)
     
     try:
         caller.call_mosaic_de_novos_in_region(region)
