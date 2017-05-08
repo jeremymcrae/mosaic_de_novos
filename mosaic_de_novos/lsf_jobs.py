@@ -105,18 +105,17 @@ def get_jobs():
     time.sleep(max(delta, 0))
     PREV_TIME = time.time()
     
-    command = ['bjobs', '-o', '"JOBID', 'USER', 'STAT', 'QUEUE', 'JOB_NAME', 'delimiter=\';\'"']
-    command = ' '.join(command)
+    command = ['bjobs', '-o', '"JOBID USER STAT QUEUE JOB_NAME delimiter=\';\'"']
     output = subprocess.check_output(command, shell=True, stderr=open(os.devnull, 'w'))
     
-    bjobs = []
+    jobs = []
     for line in output.decode('utf8').split('\n'):
         if line.startswith('JOBID') or line == '':
             continue
         
         line = line.strip().split(';')
-        entry = {'id': line[0], 'user':line[1], 'status':line[2], \
-            'queue':line[3], 'name':line[4]}
-        bjobs.append(entry)
+        entry = {'id': line[0], 'user': line[1], 'status': line[2],
+            'queue': line[3], 'command': line[4]}
+        jobs.append(entry)
     
-    return bjobs
+    return jobs
