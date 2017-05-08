@@ -27,10 +27,10 @@ import time
 import logging
 import tempfile
 
-from mosaic_de_novos.utils import get_sample_id_from_bam, make_corrected_vcf_header, \
+from mosaics.utils import get_sample_id_from_bam, make_corrected_vcf_header, \
     make_ped_for_trio, make_seq_dic_file, chrom_lengths
 
-class MosaicCalling(object):
+class Calling(object):
     """ class to construct and run the mosaic de novo calling commands for a trio
     """
     

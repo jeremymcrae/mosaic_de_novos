@@ -28,7 +28,7 @@ setup(
     author_email = "jeremy.mcrae@sanger.ac.uk",
     description = ("Identifying candidate mosaic de novo variants."),
     license = "MIT",
-    packages=["mosaic_de_novos"],
+    packages=["mosaics"],
     install_requires=['pysam >= 0.8.1',
     ],
     classifiers=[

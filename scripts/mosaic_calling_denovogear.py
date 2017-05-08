@@ -25,7 +25,7 @@ import os
 import argparse
 import logging
 
-from mosaic_de_novos.calling import MosaicCalling
+from mosaics.calling import Calling
 
 logging.basicConfig(filename='mosaic_calling.log',level=logging.DEBUG)
 
@@ -73,7 +73,7 @@ def main():
     
     args = get_options()
     
-    caller = MosaicCalling(args.proband_bam, args.mother_bam, args.father_bam,
+    caller = Calling(args.proband_bam, args.mother_bam, args.father_bam,
         args.proband_sex, args.outdir, args.proportion, args.generate_merged_bcf)
     
     region = (args.chrom, args.start, args.stop)
