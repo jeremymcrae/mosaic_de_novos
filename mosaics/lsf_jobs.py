@@ -101,11 +101,12 @@ def get_jobs():
         PREV_TIME = time.time()
     
     # don't recheck the job status too often, at most, once per 30 seconds
-    delta = 30 - (time.time() - PREV_TIME)
+    delta = 10 - (time.time() - PREV_TIME)
     time.sleep(max(delta, 0))
     PREV_TIME = time.time()
     
     command = ['bjobs', '-o', '"JOBID USER STAT QUEUE JOB_NAME delimiter=\';\'"']
+    command = ' '.join(command)
     output = subprocess.check_output(command, shell=True, stderr=open(os.devnull, 'w'))
     
     jobs = []
