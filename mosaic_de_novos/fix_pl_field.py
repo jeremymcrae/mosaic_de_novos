@@ -94,15 +94,15 @@ def fix_merged_vcf(merged):
     # standard input comes as an opened file-like interface, but given a
     # filename, the filename needs to be opened.
     try:
-        f = open(merged, "r")
+        handle = open(merged, "r")
     except TypeError:
-        f = merged
+        handle = merged
     
-    header, first_line = get_header(f)
+    header, first_line = get_header(handle)
     sys.stdout.writelines(header)
     
     process_vcf_line(first_line)
-    for line in f:
+    for line in handle:
         process_vcf_line(line)
 
 def main():
