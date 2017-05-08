@@ -25,7 +25,7 @@ import os
 import argparse
 import logging
 
-from mosaic_de_novos.mosaic_calling import MosaicCalling
+from mosaic_de_novos.calling import MosaicCalling
 
 logging.basicConfig(filename='mosaic_calling.log',level=logging.DEBUG)
 
