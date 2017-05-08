@@ -7,9 +7,6 @@ import random
 import os
 import time
 
-global PREV_TIME
-PREV_TIME = time.time()
-
 def submit_bsub_job(command, job_id=None, dependent_id=None, memory=None,
         requeue_code=None, logfile=None, queue="normal", cpus=1):
     """ construct a bsub job submission command
@@ -99,6 +96,10 @@ def get_jobs():
     ''' get a list of submitted jobs
     '''
     
+    if 'PREV_TIME' not in globals():
+        global PREV_TIME
+        PREV_TIME = time.time()
+    
     # don't recheck the job status too often, at most, once per 30 seconds
     delta = 30 - (time.time() - PREV_TIME)
     time.sleep(max(delta, 0))
@@ -109,13 +110,13 @@ def get_jobs():
     output = subprocess.check_output(command, shell=True, stderr=open(os.devnull, 'w'))
     
     bjobs = []
-    for line in output.split('\n'):
+    for line in output.decode('utf8').split('\n'):
         if line.startswith('JOBID') or line == '':
             continue
         
         line = line.strip().split(';')
-        entry = {'jobid': line[0], 'user':line[1], 'stat':line[2], \
-            'queue':line[3], 'job_name':line[4]}
+        entry = {'id': line[0], 'user':line[1], 'status':line[2], \
+            'queue':line[3], 'name':line[4]}
         bjobs.append(entry)
     
     return bjobs
