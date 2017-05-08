@@ -221,8 +221,8 @@ def make_ped_for_trio(child, mother, father, sex, ped):
     
     # make the lines for the PED file, in PED format.
     child_line = "\t".join([fam_id, child_id, father_id, mother_id, sex, "2"]) + "\n"
-    father_line = "\t".join([fam_id, father_id, "0", "0"  , "1", "1"]) + "\n"
-    mother_line = "\t".join([fam_id, mother_id, "0", "0", "1", "2"]) + "\n"
+    father_line = "\t".join([fam_id, father_id, "0", "0", "1", "1"]) + "\n"
+    mother_line = "\t".join([fam_id, mother_id, "0", "0", "2", "1"]) + "\n"
     lines = [child_line, father_line, mother_line]
     
     if isinstance(ped, str):
