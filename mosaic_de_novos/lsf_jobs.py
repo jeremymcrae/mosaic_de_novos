@@ -5,8 +5,13 @@ jobs.
 import subprocess
 import random
 import os
+import time
 
-def submit_bsub_job(command, job_id=None, dependent_id=None, memory=None, requeue_code=None, logfile=None, queue="normal", cpus=1):
+global PREV_TIME
+PREV_TIME = time.time()
+
+def submit_bsub_job(command, job_id=None, dependent_id=None, memory=None,
+        requeue_code=None, logfile=None, queue="normal", cpus=1):
     """ construct a bsub job submission command
     
     Args:
@@ -44,7 +49,7 @@ def submit_bsub_job(command, job_id=None, dependent_id=None, memory=None, requeu
             dependent_id = " && ".join(dependent_id)
         dependent = "-w '{0}'".format(dependent_id)
     
-    log = "bjob_output.txt"
+    log = "output.job"
     if logfile is not None:
         log = logfile
     
@@ -76,9 +81,7 @@ def get_random_string(prefix=None):
     different jobs do not have the same job IDs.
     """
     
-    # set up a random string to associate with the run
-    hash_string = "%8x" % random.getrandbits(32)
-    hash_string = hash_string.strip()
+    hash_string = 1
     
     # done't allow the random strings to be equivalent to a number, since
     # the LSF cluster interprets those differently from letter-containing
@@ -92,22 +95,27 @@ def get_random_string(prefix=None):
     
     return hash_string
 
-def get_bjobs():
-    """ get a list of submitted jobs
-    """
+def get_jobs():
+    ''' get a list of submitted jobs
+    '''
     
-    command = ["bjobs", "-o", "\"JOBID", "USER", "STAT", "QUEUE", "JOB_NAME", "delimiter=';'\""]
-    command = " ".join(command)
-    output = subprocess.check_output(command, shell=True, stderr=open(os.devnull, "w"))
+    # don't recheck the job status too often, at most, once per 30 seconds
+    delta = 30 - (time.time() - PREV_TIME)
+    time.sleep(max(delta, 0))
+    PREV_TIME = time.time()
+    
+    command = ['bjobs', '-o', '"JOBID', 'USER', 'STAT', 'QUEUE', 'JOB_NAME', 'delimiter=\';\'"']
+    command = ' '.join(command)
+    output = subprocess.check_output(command, shell=True, stderr=open(os.devnull, 'w'))
     
     bjobs = []
-    for line in output.split("\n"):
-        if line.startswith("JOBID") or line == "":
+    for line in output.split('\n'):
+        if line.startswith('JOBID') or line == '':
             continue
         
-        line = line.strip().split(";")
-        entry = {"jobid": line[0], "user":line[1], "stat":line[2], \
-            "queue":line[3], "job_name":line[4]}
+        line = line.strip().split(';')
+        entry = {'jobid': line[0], 'user':line[1], 'stat':line[2], \
+            'queue':line[3], 'job_name':line[4]}
         bjobs.append(entry)
     
     return bjobs
