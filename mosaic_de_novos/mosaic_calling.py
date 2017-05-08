@@ -27,7 +27,7 @@ import time
 import logging
 import tempfile
 
-from utils import get_sample_id_from_bam, make_corrected_vcf_header, \
+from mosaic_de_novos.utils import get_sample_id_from_bam, make_corrected_vcf_header, \
     make_ped_for_trio, make_seq_dic_file, chrom_lengths
 
 class MosaicCalling(object):
