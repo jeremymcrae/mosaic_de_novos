@@ -57,7 +57,7 @@ def call_mosaic_de_novos(family, sex, all_sanger_ids=None):
     commands += get_merge_merge_denovogear(outdir, child_id)
     
     command = ["\n".join(commands)]
-    submit_bsub_job(command, job_id, memory=500, requeue_code=99, queue="long", cpus=2)
+    submit_job(command, job_id, memory=500, requeue_code=99, queue="long", cpus=2)
 
 def get_merge_merge_denovogear(folder, child_id):
     """ merge all the denovogear output files, following denovogear calling
@@ -98,7 +98,7 @@ def extract_bams(sample_id, bam_dir=None, bam_path=None):
     elif bam_path is not None:
         command = ["python", BAM_EXTRACTOR, "--sample-id", sample_id, "--path", bam_path]
     
-    submit_bsub_job(command, job_id, logfile=log)
+    submit_job(command, job_id, logfile=log)
     
     return job_id
 

@@ -7,7 +7,7 @@ import random
 import os
 import time
 
-def submit_bsub_job(command, job_id=None, dependent_id=None, memory=None,
+def submit_job(command, job_id=None, dependent_id=None, memory=None,
         requeue_code=None, logfile=None, queue="normal", cpus=1, tmp=None):
     """ construct a bsub job submission command
     
