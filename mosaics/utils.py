@@ -7,7 +7,7 @@ import os
 import pysam
 
 from mosaics.lustre_bams import find_bam_on_lustre
-from mosaics.lsf_jobs import submit_bsub_job, get_random_string
+from mosaics.lsf_jobs import submit_job, get_random_string
 
 chrom_lengths = {"1": 248956422, "2": 242193529, "3": 198295559,
     "4": 190214555, "5": 181538259, "6": 170805979, "7": 159345973, \
