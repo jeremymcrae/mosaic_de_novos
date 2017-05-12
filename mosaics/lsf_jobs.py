@@ -8,7 +8,7 @@ import os
 import time
 
 def submit_bsub_job(command, job_id=None, dependent_id=None, memory=None,
-        requeue_code=None, logfile=None, queue="normal", cpus=1):
+        requeue_code=None, logfile=None, queue="normal", cpus=1, tmp=None):
     """ construct a bsub job submission command
     
     Args:
@@ -40,6 +40,10 @@ def submit_bsub_job(command, job_id=None, dependent_id=None, memory=None,
     if requeue_code is not None:
         requeue = "-Q 'EXCLUDE({0})'".format(requeue_code)
     
+    temp = ""
+    if tmp is not None:
+        temp = "-R 'select[tmp>{}]'".format(tmp)
+    
     dependent = ""
     if dependent_id is not None:
         if type(dependent_id) == list:
@@ -50,7 +54,7 @@ def submit_bsub_job(command, job_id=None, dependent_id=None, memory=None,
     if logfile is not None:
         log = logfile
     
-    preamble = ["bsub", job, dependent, requeue, "-q", queue, "-o", log, mem, threads]
+    preamble = ["bsub", job, dependent, requeue, temp, "-q", queue, "-o", log, mem, threads]
     command = ["bash", "-c", "\""] + command + ["\""]
     
     command = " ".join(preamble + command)
@@ -93,19 +97,28 @@ def get_random_string(prefix=None):
     return hash_string
 
 def get_jobs():
-    ''' get a list of submitted jobs
+    ''' get a list of submitted jobs. These can be outdated by up to ten seconds
     '''
+    
+    if 'jobs' not in globals():
+        global jobs
+        jobs = []
     
     if 'PREV_TIME' not in globals():
         global PREV_TIME
-        PREV_TIME = time.time()
+        PREV_TIME = time.time() - 10
     
-    # don't recheck the job status too often, at most, once per 30 seconds
+    # don't recheck the job status too often, at most, once per 10 seconds,
+    # If we are within the previous window, just return the previous job list.
+    # This doesn't count jobs submitted in the interim, but there will only be
+    # 5-10 extra jobs during the ten seconds.
     delta = 10 - (time.time() - PREV_TIME)
-    time.sleep(max(delta, 0))
+    if delta > 0:
+        return jobs
+    
     PREV_TIME = time.time()
     
-    command = ['bjobs', '-o', '"JOBID USER STAT QUEUE JOB_NAME delimiter=\';\'"']
+    command = ['bjobs', '-o', '"JOBID USER STAT QUEUE JOB_NAME COMMAND delimiter=\';\'"']
     command = ' '.join(command)
     output = subprocess.check_output(command, shell=True, stderr=open(os.devnull, 'w'))
     
@@ -114,9 +127,9 @@ def get_jobs():
         if line.startswith('JOBID') or line == '':
             continue
         
-        line = line.strip().split(';')
-        entry = {'id': line[0], 'user': line[1], 'status': line[2],
-            'queue': line[3], 'command': line[4]}
+        job_id, user, status, queue, name, command = line.strip().split(';')
+        entry = {'id': job_id, 'user': user, 'status': status,
+            'queue': queue, 'name': name, 'command': command}
         jobs.append(entry)
     
     return jobs
