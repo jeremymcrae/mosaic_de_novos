@@ -127,7 +127,7 @@ def get_jobs():
         if line.startswith('JOBID') or line == '':
             continue
         
-        job_id, user, status, queue, name, command = line.strip().split(';')
+        job_id, user, status, queue, name, *command = line.strip().split(';')
         entry = {'id': job_id, 'user': user, 'status': status,
             'queue': queue, 'name': name, 'command': command}
         jobs.append(entry)
