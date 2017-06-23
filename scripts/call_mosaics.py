@@ -56,10 +56,6 @@ def get_options():
     parser.add_argument('--proportion', type=float, default=0.25,
         help='Expected proportion of somatic mosaicism')
     
-    parser.add_argument('--generate-merged-bcf', default=False, action='store_true',
-        help='Whether to only create a merged BCF for the trio, rather than '
-            'running denovogear on a temporary BCF.')
-    
     args = parser.parse_args()
     
     if args.proportion > 1 or args.proportion < 0:
@@ -75,7 +71,7 @@ def main():
     args = get_options()
     
     caller = Calling(args.proband_bam, args.mother_bam, args.father_bam,
-        args.proband_sex, args.outdir, args.proportion, args.generate_merged_bcf)
+        args.proband_sex, args.outdir, args.proportion)
     
     region = (args.chrom, args.start, args.stop)
     
