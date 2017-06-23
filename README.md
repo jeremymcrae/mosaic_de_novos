@@ -10,6 +10,8 @@ git clone https://github.com/jeremymcrae/mosaic_de_novos.git
 # Then change directory:
 cd mosaic_de_novos
 
+python setup.py install
+
 # Call mosaics for a single chromosome with:
 python mosaic_de_novos/mosaic_calling_denovo_gear.py \
   --proband-bam PROBAND_BAM_PATH \
@@ -22,12 +24,12 @@ python mosaic_de_novos/mosaic_calling_denovo_gear.py \
 
 You can also call variants in specific regions within a single chromosome with
 `--start START_POS` and `--stop STOP_POS`. Otherwise it will default to the full
-chromosome length. By default this looks for mosaic events witha proportion
+chromosome length. By default this looks for mosaic events with a proportion
 around 0.25, but you can change this by including the argument `--proportion X`,
-where X is between 0 and 1.
+where X is between 0 and 1. NOTE: this might not be true, it might only use 0.25.
 
 It should generate a file in RESULTS_DIR named:
-`PROBAND_ID.denovogear.CHROM.START-STOP.standard.dnm`
+`PROBAND_ID.denovogear.CHROM.START-STOP.modified.dnm`
 
 Of course, this will probably fail in some way, most likely due to pysam
 requirements. You can install pysam on the farm with:
