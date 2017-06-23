@@ -59,7 +59,7 @@ class Calling(object):
     make_seq_dic_file(seq_dic)
          
     def __init__(self, child_bam, mother_bam, father_bam, sex, output_dir=None, \
-        proportion=0.25, generate_merged_bcf=False):
+        proportion=0.25):
         """ initiates the class with the BAM paths etc
         
         Args:
@@ -93,8 +93,6 @@ class Calling(object):
         
         self.proportion = proportion
         assert 0 <= self.proportion <= 1
-        
-        self.generate_merged_bcf = generate_merged_bcf
     
     def call_mosaic_de_novos_in_region(self, region):
         """ call the rest of the functions in this class, in the correct order,
@@ -119,7 +117,7 @@ class Calling(object):
             child_vcf = self.samtools(self.child_bam, region, modified=True)
             
             # prepare a BCF file for denovogear, then run denovogear on that
-            self.run_denovogear(child_vcf, mother_vcf, father_vcf, region, "modified")
+            self.run_denovogear(child_vcf, mother_vcf, father_vcf, region)
         finally:
             # ensure we remove the temporary files that were produced
             self.ped.close()
@@ -206,7 +204,7 @@ class Calling(object):
         
         return vcf
     
-    def run_denovogear(self, child, mother, father, region, modify):
+    def run_denovogear(self, child, mother, father, region):
         """ we need to merge the VCFs and convert to BCF, then run denovogear
         
         Args:
@@ -214,8 +212,6 @@ class Calling(object):
             mother: handle for mother's VCF file.
             father: handle for father's VCF file.
             region: tuple of (chrom, start, stop) strings.
-            modify: either "modified" or "standard" to indicate which samtools
-                was used for the proband.
         """
         
         child_id = get_sample_id_from_bam(self.child_bam)
@@ -242,20 +238,11 @@ class Calling(object):
             self.seq_dic.name, "-Sb", "/dev/stdin"], stdin=pl_fix.stdout,
             stdout=subprocess.PIPE)
         
-        dnm = os.path.join(self.output_dir, "{0}.denovogear.{1}.{2}.dnm".format(child_id, region_path, modify))
-        bcf_path = os.path.join(self.output_dir, "{0}.denovogear.{1}.{2}.bcf".format(child_id, region_path, modify))
-        if self.generate_merged_bcf:
-            with open(bcf_path, "w") as output:
-                for line in bcf.stdout:
-                    output.write(line)
-            subprocess.call([self.denovogear, "dnm", dng_chr_type, "--ped", \
-                self.ped.name, "--bcf", bcf_path],  stdout=open(dnm, "w"), \
-                stderr=open(os.devnull, "w"))
-        else:
-            # and run de novogear on the output
-            subprocess.call([self.denovogear, "dnm", dng_chr_type, "--ped", \
-                self.ped.name, "--bcf", "/dev/stdin"], stdin=bcf.stdout,  \
-                stdout=open(dnm, "w"), stderr=open(os.devnull, "w"))
+        dnm = os.path.join(self.output_dir, "{0}.denovogear.{1}.modified.dnm".format(child_id, region_path))
+        # and run denovogear
+        subprocess.call([self.denovogear, "dnm", dng_chr_type, "--ped", \
+            self.ped.name, "--bcf", "/dev/stdin"], stdin=bcf.stdout,  \
+            stdout=open(dnm, "w"), stderr=open(os.devnull, "w"))
     
     def remove_vcfs(self):
         """ remove the temporary VCF files for the region
