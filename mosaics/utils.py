@@ -57,7 +57,7 @@ def make_seq_dic_file(seq_dic):
         nothing
     """
     
-    chroms = list(range(1, 22)) + ["X", "Y"]
+    chroms = list(range(1, 23)) + ["X", "Y"]
     chroms = [str(x) for x in chroms]
     chroms = "\n".join(chroms) + "\n"
     
